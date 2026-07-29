@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "How to test Castel — Judge guide",
-  description: "A step-by-step guide for hackathon judges to test Castel end to end.",
+  title: "How to test Castel — Tester guide",
+  description: "A step-by-step guide for testers to try Castel end to end.",
 };
 
 const JOIN_CODE = "scientist-shelf";
@@ -121,13 +121,13 @@ export default function GuidePage() {
           <Link href="/" className="text-sm text-muted-foreground">
             ← Home
           </Link>
-          <span className="font-[family-name:var(--font-heading)] font-bold">Judge guide</span>
+          <span className="font-[family-name:var(--font-heading)] font-bold">Tester guide</span>
         </div>
       </header>
 
       <div className="animate-rise">
         <span className="inline-block rounded-full bg-success-soft px-3 py-1 text-xs font-medium text-success">
-          For hackathon judges
+          For testers
         </span>
         <h1 className="mt-4 font-[family-name:var(--font-heading)] text-4xl font-bold leading-tight tracking-tight">
           How to test Castel
