@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "A step-by-step guide for hackathon judges to test Castel end to end.",
 };
 
-const JOIN_CODE = "your-two-word-code";
+const JOIN_CODE = "scientist-shelf";
 
 const steps = [
   {
@@ -162,10 +162,6 @@ export default function GuidePage() {
               <code className="block font-[family-name:var(--font-mono)] text-base font-semibold text-primary">
                 join {JOIN_CODE}
               </code>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                (replace <span className="font-[family-name:var(--font-mono)]">{JOIN_CODE}</span>{" "}
-                with the current sandbox code)
-              </p>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               You should get back <span className="italic">&ldquo;You are all set!&rdquo;</span>
