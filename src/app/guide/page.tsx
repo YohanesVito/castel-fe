@@ -210,14 +210,7 @@ export default function GuidePage() {
                 {s.n}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">
-                  {s.t}
-                  {s.optional && (
-                    <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Optional
-                    </span>
-                  )}
-                </p>
+                <p className="font-semibold">{s.t}</p>
                 <div className="mt-1.5">{s.body}</div>
               </div>
             </div>
