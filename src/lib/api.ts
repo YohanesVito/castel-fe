@@ -103,11 +103,33 @@ export const api = {
   balance: () => req<Balances>("/me/balance"),
   limits: () => req<Limits>("/me/limits"),
   history: () => req<Tx[]>("/me/history"),
+  wallet: () =>
+    req<{
+      publicKey: string;
+      usdc: { code: string; issuer: string };
+      balances: Balances;
+      hasSavedCard: boolean;
+      cardLast4: string | null;
+    }>("/me/wallet"),
 
   quote: (usdc: number) => req<Quote>(`/fx/quote?usdc=${usdc}`),
   fund: (usdc: number) => req<Balances>("/fund", { method: "POST", body: { usdc } }),
   depositCreate: (usd: number) =>
     req<{ url: string }>("/deposit/create", { method: "POST", body: { usd } }),
+  depositCharge: (usd: number) =>
+    req<{
+      credited: boolean;
+      usd: number;
+      cidr?: number;
+      savingsIdr?: number;
+      exchangeFailed?: string;
+      balances: Balances;
+    }>("/deposit/charge", { method: "POST", body: { usd } }),
+  depositUsdcConvert: () =>
+    req<{ credited: boolean; usdc: number; cidr: number; savingsIdr: number; balances: Balances }>(
+      "/deposit/usdc/convert",
+      { method: "POST" },
+    ),
   depositConfirm: (sessionId: string) =>
     req<{
       credited: boolean;

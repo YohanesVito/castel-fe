@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import QRCode from "qrcode";
 import { useCallback, useEffect, useState } from "react";
-import { api, type Balances, type Limits, type Quote, type Tx } from "@/lib/api";
+import { api, ApiError, type Balances, type Limits, type Quote, type Tx } from "@/lib/api";
 import { clearSession, getToken, setToken, takeLinkToken } from "@/lib/session";
 import { PinPrompt } from "@/components/PinPrompt";
 import { SignIn } from "@/components/SignIn";
@@ -22,8 +23,11 @@ export default function WalletPage() {
   const [amount, setAmount] = useState("200");
   const [quote, setQuote] = useState<Quote | null>(null);
   const [showDeposit, setShowDeposit] = useState(false);
+  const [depMode, setDepMode] = useState<"card" | "usdc">("card");
   const [depAmt, setDepAmt] = useState("200");
   const [depQuote, setDepQuote] = useState<Quote | null>(null);
+  const [wal, setWal] = useState<Awaited<ReturnType<typeof api.wallet>> | null>(null);
+  const [usdcQr, setUsdcQr] = useState<string | null>(null);
   const [askPin, setAskPin] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -146,6 +150,20 @@ export default function WalletPage() {
     if (new URLSearchParams(window.location.search).get("topup")) setShowDeposit(true);
   }, []);
 
+  // The deposit sheet needs the wallet address + whether a card is on file.
+  useEffect(() => {
+    if (!showDeposit || wal || !waNumber) return;
+    api.wallet().then(setWal).catch(() => {});
+  }, [showDeposit, wal, waNumber]);
+
+  // A QR of the Stellar address, for the USDC on-ramp.
+  useEffect(() => {
+    if (depMode !== "usdc" || !wal || usdcQr) return;
+    QRCode.toDataURL(wal.publicKey, { margin: 1, width: 240 })
+      .then(setUsdcQr)
+      .catch(() => {});
+  }, [depMode, wal, usdcQr]);
+
   async function topup() {
     setBusy(true);
     try {
@@ -171,6 +189,52 @@ export default function WalletPage() {
       window.location.href = url;
     } catch (e) {
       flash("Couldn't start deposit: " + (e as Error).message, false);
+      setBusy(false);
+    }
+  }
+
+  // One-tap top-up on the saved card. If Stripe wants the card re-entered (e.g. it now
+  // needs authentication), fall back to the Checkout redirect.
+  async function chargeSaved() {
+    const usd = Number(depAmt);
+    if (!usd || usd <= 0) {
+      flash("Enter an amount", false);
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api.depositCharge(usd);
+      setBalances(res.balances);
+      flash(
+        res.cidr
+          ? `${idr(res.cidr)} added — ${idr(res.savingsIdr ?? 0)} more than a money changer`
+          : `$${res.usd} added — exchange pending`,
+        !res.exchangeFailed,
+      );
+      setShowDeposit(false);
+      refresh();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 402) {
+        await startDeposit();
+        return;
+      }
+      flash("Top-up failed: " + (e as Error).message, false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function convertUsdc() {
+    setBusy(true);
+    try {
+      const res = await api.depositUsdcConvert();
+      setBalances(res.balances);
+      flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
+      setShowDeposit(false);
+      refresh();
+    } catch (e) {
+      flash((e as Error).message, false);
+    } finally {
       setBusy(false);
     }
   }
@@ -326,58 +390,139 @@ export default function WalletPage() {
             </div>
           ) : (
             <div className="rounded-xl bg-white/15 p-3 backdrop-blur">
-              <div className="flex items-center gap-2">
-                <span className="font-[family-name:var(--font-mono)] text-lg">$</span>
-                <input
-                  type="number"
-                  value={depAmt}
-                  onChange={(e) => setDepAmt(e.target.value)}
-                  className="w-full min-w-0 rounded-lg bg-white/90 px-3 py-2 font-[family-name:var(--font-mono)] text-lg text-foreground outline-none"
-                />
-              </div>
-              <div className="mt-2 flex gap-2">
-                {[50, 100, 200].map((v) => (
+              <div className="mb-3 flex rounded-full bg-white/15 p-0.5 text-xs font-medium">
+                {(["card", "usdc"] as const).map((m) => (
                   <button
-                    key={v}
-                    type="button"
-                    onClick={() => setDepAmt(String(v))}
-                    className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium transition active:scale-95"
+                    key={m}
+                    onClick={() => setDepMode(m)}
+                    className={`flex-1 rounded-full py-1.5 transition ${
+                      depMode === m ? "bg-white text-primary shadow" : "text-white/80"
+                    }`}
                   >
-                    ${v}
+                    {m === "card" ? "💳 Card" : "⭐ USDC"}
                   </button>
                 ))}
               </div>
-              {depQuote && (
-                <div className="mt-3 rounded-lg bg-white/20 px-3 py-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="opacity-80">You get</span>
-                    <span className="font-[family-name:var(--font-mono)] font-bold">
-                      {idr(depQuote.cidrOut)}
-                    </span>
+
+              {depMode === "card" ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="font-[family-name:var(--font-mono)] text-lg">$</span>
+                    <input
+                      type="number"
+                      value={depAmt}
+                      onChange={(e) => setDepAmt(e.target.value)}
+                      className="w-full min-w-0 rounded-lg bg-white/90 px-3 py-2 font-[family-name:var(--font-mono)] text-lg text-foreground outline-none"
+                    />
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-xs opacity-80">
-                    <span>vs money changer (est.)</span>
-                    <span className="font-[family-name:var(--font-mono)]">
-                      {depQuote.savingsIdr >= 0 ? "+" : ""}
-                      {idr(depQuote.savingsIdr)}
-                    </span>
+                  <div className="mt-2 flex gap-2">
+                    {[50, 100, 200].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setDepAmt(String(v))}
+                        className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium transition active:scale-95"
+                      >
+                        ${v}
+                      </button>
+                    ))}
                   </div>
-                  <p className="mt-1 text-[11px] opacity-60">
-                    Market rate {depQuote.midRate.toFixed(0)}/USD
-                    {depQuote.midSource === "live" ? " · live" : " · last known"}
+                  {depQuote && (
+                    <div className="mt-3 rounded-lg bg-white/20 px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="opacity-80">You get</span>
+                        <span className="font-[family-name:var(--font-mono)] font-bold">
+                          {idr(depQuote.cidrOut)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-xs opacity-80">
+                        <span>vs money changer (est.)</span>
+                        <span className="font-[family-name:var(--font-mono)]">
+                          {depQuote.savingsIdr >= 0 ? "+" : ""}
+                          {idr(depQuote.savingsIdr)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] opacity-60">
+                        Market rate {depQuote.midRate.toFixed(0)}/USD
+                        {depQuote.midSource === "live" ? " · live" : " · last known"}
+                      </p>
+                    </div>
+                  )}
+                  {wal?.hasSavedCard ? (
+                    <>
+                      <button
+                        onClick={chargeSaved}
+                        disabled={busy}
+                        className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                      >
+                        {busy ? "Charging…" : `Pay with card •••• ${wal.cardLast4}`}
+                      </button>
+                      <button
+                        onClick={startDeposit}
+                        disabled={busy}
+                        className="mt-2 w-full py-1 text-center text-[11px] text-white/70 underline underline-offset-2 disabled:opacity-50"
+                      >
+                        Use a different card
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={startDeposit}
+                        disabled={busy}
+                        className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                      >
+                        {busy ? "Redirecting…" : "Top up with card →"}
+                      </button>
+                      <p className="mt-2 text-center text-[11px] text-white/70">
+                        Test card 4242 4242 4242 4242 · any future date · any CVC
+                      </p>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-white/80">
+                    Already hold USDC? Send Stellar USDC to your Castel address and it converts to
+                    rupiah.
                   </p>
-                </div>
+                  {usdcQr && (
+                    <div className="mx-auto mt-3 w-fit rounded-xl bg-white p-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={usdcQr} alt="Your Stellar address" className="h-32 w-32" />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (wal) {
+                        navigator.clipboard?.writeText(wal.publicKey);
+                        flash("Address copied");
+                      }
+                    }}
+                    className="mt-3 w-full break-all rounded-lg bg-white/20 px-3 py-2 text-left font-[family-name:var(--font-mono)] text-[11px] transition active:scale-[0.99]"
+                  >
+                    {wal?.publicKey ?? "…"}
+                    <span className="ml-1 opacity-70">· tap to copy</span>
+                  </button>
+                  <p className="mt-2 text-[11px] text-white/60">
+                    Asset: USDC · issuer {wal ? `${wal.usdc.issuer.slice(0, 6)}…` : "…"}
+                  </p>
+                  <button
+                    onClick={convertUsdc}
+                    disabled={busy}
+                    className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {busy ? "Converting…" : "I've sent USDC — convert to rupiah"}
+                  </button>
+                  <button
+                    onClick={topup}
+                    disabled={busy}
+                    className="mt-2 w-full py-1 text-center text-[11px] text-white/70 underline underline-offset-2 disabled:opacity-50"
+                  >
+                    Testnet: get 200 test USDC to try this
+                  </button>
+                </>
               )}
-              <button
-                onClick={startDeposit}
-                disabled={busy}
-                className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
-              >
-                {busy ? "Redirecting…" : "Top up with card →"}
-              </button>
-              <p className="mt-2 text-center text-[11px] text-white/70">
-                Test card 4242 4242 4242 4242 · any future date · any CVC
-              </p>
             </div>
           )}
         </div>
