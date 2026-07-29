@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test",
+    "test:e2e:testnet": "RUN_TESTNET=1 playwright test"
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "^2.3.0",

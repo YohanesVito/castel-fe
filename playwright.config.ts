@@ -14,7 +14,7 @@ export default defineConfig({
   // Live-testnet ops (fund/convert/pay/escrow) occasionally hiccup, especially back-to-back;
   // one retry absorbs a transient blip. The heavy flows opt into more (see the spec).
   retries: 2,
-  timeout: 120_000,
+  timeout: 180_000,
   expect: { timeout: 15_000 },
   reporter: [["list"]],
 
@@ -45,7 +45,7 @@ export default defineConfig({
       cwd: "../castel-be",
       url: `http://localhost:${BE_PORT}/`,
       reuseExistingServer: true,
-      timeout: 120_000,
+      timeout: 180_000,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -54,7 +54,7 @@ export default defineConfig({
       command: "bun run dev",
       url: `http://localhost:${FE_PORT}`,
       reuseExistingServer: true,
-      timeout: 120_000,
+      timeout: 180_000,
       stdout: "pipe",
       stderr: "pipe",
     },
