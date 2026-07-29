@@ -103,18 +103,6 @@ const steps = [
       </>
     ),
   },
-  {
-    n: "4",
-    t: "Cash out",
-    optional: true,
-    body: (
-      <p className="text-sm text-muted-foreground">
-        Leftover balance isn&apos;t stranded. Request cash and enter your PIN to get a pickup QR;
-        the <span className="font-[family-name:var(--font-mono)]">/agent</span> page scans it to
-        release the on-chain Soroban escrow and hand over rupiah.
-      </p>
-    ),
-  },
 ];
 
 function Mono({ children }: { children: React.ReactNode }) {
@@ -145,8 +133,8 @@ export default function GuidePage() {
           How to test Castel
         </h1>
         <p className="mt-3 text-base text-muted-foreground">
-          A five-minute walkthrough of the full flow — sign in on WhatsApp, add money, pay a
-          merchant, and cash out. Follow the steps in order.
+          A five-minute walkthrough of the full flow — sign in on WhatsApp, add money, and pay a
+          merchant. Follow the steps in order.
         </p>
 
         <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/5 p-4">
