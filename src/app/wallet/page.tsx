@@ -8,10 +8,29 @@ import { clearSession, getToken, setToken, takeLinkToken } from "@/lib/session";
 import { PinPrompt } from "@/components/PinPrompt";
 import { SignIn } from "@/components/SignIn";
 import { idr } from "@/lib/format";
+import {
+  addTrustline,
+  connectWallet,
+  disconnectWallet,
+  onTestnet,
+  sendUsdc,
+  usdcBalance,
+  walletNetworkPassphrase,
+} from "@/lib/stellar-wallet";
 
 const EXPLORER = "https://stellar.expert/explorer/testnet/tx/";
 
 const toNum = (s: string) => Number(s);
+
+// Wallet extensions throw terse, uneven errors; map the common ones to something a tester reads.
+function walletErr(e: unknown): string {
+  const m = (e as Error)?.message ?? String(e);
+  if (/reject|denied|declin|cancel/i.test(m)) return "Cancelled in wallet";
+  if (/not.*install|no wallet|unavailable|not found/i.test(m)) return "No wallet found — install Freighter";
+  if (/op_no_trust|no_trust/i.test(m)) return "Your wallet has no USDC trustline yet";
+  if (/op_underfunded|underfunded/i.test(m)) return "Not enough USDC in your wallet";
+  return m;
+}
 
 export default function WalletPage() {
   const [waNumber, setWaNumber] = useState<string | null>(null);
@@ -28,6 +47,10 @@ export default function WalletPage() {
   const [depQuote, setDepQuote] = useState<Quote | null>(null);
   const [wal, setWal] = useState<Awaited<ReturnType<typeof api.wallet>> | null>(null);
   const [usdcQr, setUsdcQr] = useState<string | null>(null);
+  const [walletAddr, setWalletAddr] = useState<string | null>(null);
+  const [circle, setCircle] = useState<{ castel: string; issuer: string } | null>(null);
+  const [walBal, setWalBal] = useState<number | null>(null); // USDC in the connected wallet; null = no trustline
+  const [netOk, setNetOk] = useState(true);
   const [askPin, setAskPin] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -234,6 +257,69 @@ export default function WalletPage() {
       refresh();
     } catch (e) {
       flash((e as Error).message, false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Crypto on-ramp: connect a Stellar wallet, then send real Circle USDC straight from it.
+  async function connect() {
+    setBusy(true);
+    try {
+      const addr = await connectWallet();
+      setWalletAddr(addr);
+      setNetOk(onTestnet(await walletNetworkPassphrase()));
+      const prep = await api.depositCirclePrepare(); // trustlines the Castel address + returns the issuer
+      setCircle({ castel: prep.publicKey, issuer: prep.asset.issuer });
+      setWalBal(await usdcBalance(addr, prep.asset.issuer));
+    } catch (e) {
+      flash(walletErr(e), false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    try {
+      await disconnectWallet();
+    } catch {}
+    setWalletAddr(null);
+    setCircle(null);
+    setWalBal(null);
+    setNetOk(true);
+  }
+
+  async function trustWallet() {
+    if (!walletAddr || !circle) return;
+    setBusy(true);
+    try {
+      await addTrustline(walletAddr, circle.issuer);
+      setWalBal(await usdcBalance(walletAddr, circle.issuer));
+      flash("USDC trustline added — now get testnet USDC");
+    } catch (e) {
+      flash(walletErr(e), false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function depositViaWallet() {
+    if (!walletAddr || !circle) return;
+    const amt = Number(depAmt);
+    if (!amt || amt <= 0) return flash("Enter an amount", false);
+    if (walBal != null && amt > walBal) return flash("Not enough USDC in your wallet", false);
+    setBusy(true);
+    try {
+      await sendUsdc({ from: walletAddr, to: circle.castel, issuer: circle.issuer, amount: String(amt) });
+      flash("Sent from your wallet — converting…");
+      const res = await api.depositCircleConvert();
+      setBalances(res.balances);
+      setWalBal(await usdcBalance(walletAddr, circle.issuer));
+      flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
+      setShowDeposit(false);
+      refresh();
+    } catch (e) {
+      flash(walletErr(e), false);
     } finally {
       setBusy(false);
     }
@@ -482,45 +568,157 @@ export default function WalletPage() {
                 </>
               ) : (
                 <>
-                  <p className="text-xs text-white/80">
-                    Already hold USDC? Send Stellar USDC to your Castel address and it converts to
-                    rupiah.
-                  </p>
-                  {usdcQr && (
-                    <div className="mx-auto mt-3 w-fit rounded-xl bg-white p-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={usdcQr} alt="Your Stellar address" className="h-32 w-32" />
-                    </div>
+                  {!walletAddr ? (
+                    <>
+                      <p className="text-xs text-white/80">
+                        Crypto investor? Connect a Stellar wallet and deposit real testnet USDC — it
+                        converts to rupiah at the reference rate.
+                      </p>
+                      <button
+                        onClick={connect}
+                        disabled={busy}
+                        className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                      >
+                        {busy ? "Connecting…" : "⭐ Connect wallet (Freighter)"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between rounded-lg bg-white/20 px-3 py-2 text-xs">
+                        <span className="font-[family-name:var(--font-mono)]">
+                          {walletAddr.slice(0, 4)}…{walletAddr.slice(-4)}
+                        </span>
+                        <button
+                          onClick={disconnect}
+                          className="underline underline-offset-2 opacity-80 transition active:scale-95"
+                        >
+                          disconnect
+                        </button>
+                      </div>
+
+                      {!netOk && (
+                        <p className="mt-2 rounded-lg bg-warning/40 px-3 py-2 text-[11px]">
+                          Your wallet isn&apos;t on Testnet. Switch it to Testnet, then reconnect.
+                        </p>
+                      )}
+
+                      {walBal == null ? (
+                        <>
+                          <p className="mt-3 text-xs text-white/80">
+                            Your wallet needs a USDC trustline before it can hold testnet USDC.
+                          </p>
+                          <button
+                            onClick={trustWallet}
+                            disabled={busy || !netOk}
+                            className="mt-2 w-full rounded-full bg-white/90 py-2 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                          >
+                            {busy ? "Adding…" : "Add USDC trustline"}
+                          </button>
+                        </>
+                      ) : (
+                        <p className="mt-3 text-xs text-white/80">
+                          Wallet holds{" "}
+                          <span className="font-[family-name:var(--font-mono)]">
+                            {walBal.toFixed(2)}
+                          </span>{" "}
+                          USDC
+                        </p>
+                      )}
+
+                      <a
+                        href="https://faucet.circle.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 block text-[11px] text-white/70 underline underline-offset-2"
+                      >
+                        Need testnet USDC? Get it from Circle&apos;s faucet (Stellar Testnet) ↗
+                      </a>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="font-[family-name:var(--font-mono)] text-lg">$</span>
+                        <input
+                          type="number"
+                          value={depAmt}
+                          onChange={(e) => setDepAmt(e.target.value)}
+                          className="w-full min-w-0 rounded-lg bg-white/90 px-3 py-2 font-[family-name:var(--font-mono)] text-lg text-foreground outline-none"
+                        />
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        {[20, 50, 100].map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setDepAmt(String(v))}
+                            className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium transition active:scale-95"
+                          >
+                            ${v}
+                          </button>
+                        ))}
+                      </div>
+                      {depQuote && (
+                        <div className="mt-3 rounded-lg bg-white/20 px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="opacity-80">You get</span>
+                            <span className="font-[family-name:var(--font-mono)] font-bold">
+                              {idr(depQuote.cidrOut)}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between text-xs opacity-80">
+                            <span>vs money changer (est.)</span>
+                            <span className="font-[family-name:var(--font-mono)]">
+                              {depQuote.savingsIdr >= 0 ? "+" : ""}
+                              {idr(depQuote.savingsIdr)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        onClick={depositViaWallet}
+                        disabled={busy || !netOk || walBal == null}
+                        className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                      >
+                        {busy ? "Depositing…" : `Deposit ${depAmt || 0} USDC →`}
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => {
-                      if (wal) {
-                        navigator.clipboard?.writeText(wal.publicKey);
-                        flash("Address copied");
-                      }
-                    }}
-                    className="mt-3 w-full break-all rounded-lg bg-white/20 px-3 py-2 text-left font-[family-name:var(--font-mono)] text-[11px] transition active:scale-[0.99]"
-                  >
-                    {wal?.publicKey ?? "…"}
-                    <span className="ml-1 opacity-70">· tap to copy</span>
-                  </button>
-                  <p className="mt-2 text-[11px] text-white/60">
-                    Asset: USDC · issuer {wal ? `${wal.usdc.issuer.slice(0, 6)}…` : "…"}
-                  </p>
-                  <button
-                    onClick={convertUsdc}
-                    disabled={busy}
-                    className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {busy ? "Converting…" : "I've sent USDC — convert to rupiah"}
-                  </button>
-                  <button
-                    onClick={topup}
-                    disabled={busy}
-                    className="mt-2 w-full py-1 text-center text-[11px] text-white/70 underline underline-offset-2 disabled:opacity-50"
-                  >
-                    Testnet: get 200 test USDC to try this
-                  </button>
+
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-[11px] text-white/70">
+                      No wallet extension? Send USDC manually
+                    </summary>
+                    {usdcQr && (
+                      <div className="mx-auto mt-3 w-fit rounded-xl bg-white p-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={usdcQr} alt="Your Stellar address" className="h-32 w-32" />
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (wal) {
+                          navigator.clipboard?.writeText(wal.publicKey);
+                          flash("Address copied");
+                        }
+                      }}
+                      className="mt-3 w-full break-all rounded-lg bg-white/20 px-3 py-2 text-left font-[family-name:var(--font-mono)] text-[11px] transition active:scale-[0.99]"
+                    >
+                      {wal?.publicKey ?? "…"}
+                      <span className="ml-1 opacity-70">· tap to copy</span>
+                    </button>
+                    <button
+                      onClick={convertUsdc}
+                      disabled={busy}
+                      className="mt-3 w-full rounded-full bg-white/90 py-2 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {busy ? "Converting…" : "I've sent USDC — convert to rupiah"}
+                    </button>
+                    <button
+                      onClick={topup}
+                      disabled={busy}
+                      className="mt-2 w-full py-1 text-center text-[11px] text-white/70 underline underline-offset-2 disabled:opacity-50"
+                    >
+                      Testnet: get 200 test USDC to try this
+                    </button>
+                  </details>
                 </>
               )}
             </div>

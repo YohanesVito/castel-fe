@@ -130,6 +130,22 @@ export const api = {
       "/deposit/usdc/convert",
       { method: "POST" },
     ),
+  // Crypto on-ramp with a connected wallet (Freighter): prepare trustlines the Castel
+  // address to Circle USDC and returns where to send it; convert credits rupiah for USDC
+  // that has arrived.
+  depositCirclePrepare: () =>
+    req<{ publicKey: string; asset: { code: string; issuer: string } }>("/deposit/circle/prepare", {
+      method: "POST",
+    }),
+  depositCircleConvert: () =>
+    req<{
+      credited: boolean;
+      usdc: number;
+      cidr: number;
+      savingsIdr: number;
+      hash: string;
+      balances: Balances;
+    }>("/deposit/circle/convert", { method: "POST" }),
   depositConfirm: (sessionId: string) =>
     req<{
       credited: boolean;
