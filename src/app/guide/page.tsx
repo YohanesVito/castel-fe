@@ -34,54 +34,84 @@ const steps = [
   },
   {
     n: "2",
-    t: "Top up with a card",
+    t: "Add money — two ways",
     body: (
       <>
         <p className="text-sm text-muted-foreground">
-          Tap <span className="font-medium text-foreground">&ldquo;+ Add money&rdquo;</span> and
-          enter an amount. On the Stripe screen use TEST card{" "}
-          <Mono>4242 4242 4242 4242</Mono>, any future expiry (e.g.{" "}
-          <span className="font-[family-name:var(--font-mono)]">12/34</span>), any CVC (e.g.{" "}
-          <span className="font-[family-name:var(--font-mono)]">123</span>), and any postal code.
+          Tap <span className="font-medium text-foreground">&ldquo;+ Add money&rdquo;</span>. The
+          sheet has a <span className="font-medium text-foreground">Card</span> and a{" "}
+          <span className="font-medium text-foreground">USDC</span> tab — either way, your balance
+          ends up in <span className="font-medium text-foreground">rupiah</span>.
         </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Your balance appears in <span className="font-medium text-foreground">rupiah</span> — the
-          USDC is auto-converted on Stellar.
-        </p>
+        <div className="mt-3 space-y-2.5">
+          <div className="rounded-xl border border-border bg-background p-3">
+            <p className="text-sm font-semibold">💳 Card (fiat)</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              For any tourist. Enter an amount, pay on Stripe with TEST card{" "}
+              <Mono>4242 4242 4242 4242</Mono>, any future expiry{" "}
+              <span className="font-[family-name:var(--font-mono)]">12/34</span>, any CVC{" "}
+              <span className="font-[family-name:var(--font-mono)]">123</span>. The card is saved,
+              so the next top-up is one tap. USDC is auto-converted to rupiah on Stellar.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-background p-3">
+            <p className="text-sm font-semibold">⭐ USDC (crypto)</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              For crypto-native users. The USDC tab shows your Stellar address + QR — send Stellar
+              USDC to it, then tap{" "}
+              <span className="font-medium text-foreground">&ldquo;convert to rupiah&rdquo;</span>.
+              To try it on testnet, tap{" "}
+              <span className="font-medium text-foreground">&ldquo;get 200 test USDC&rdquo;</span>{" "}
+              first.
+            </p>
+          </div>
+        </div>
       </>
     ),
   },
   {
     n: "3",
-    t: "Pay a QRIS merchant",
+    t: "Pay a QRIS merchant — two ways",
     body: (
-      <p className="text-sm text-muted-foreground">
-        Open <span className="font-medium text-foreground">Pay</span>, point the camera at a QRIS
-        code or tap <span className="font-medium text-foreground">&ldquo;Use sample&rdquo;</span>,
-        confirm, and enter your PIN. The merchant is settled in real rupiah (Xendit sandbox).
-      </p>
+      <>
+        <p className="text-sm text-muted-foreground">
+          Open <span className="font-medium text-foreground">Pay</span>, point the camera at a QRIS
+          code or tap <span className="font-medium text-foreground">&ldquo;Use sample&rdquo;</span>.
+          How you pay depends on whether you hold a balance:
+        </p>
+        <div className="mt-3 space-y-2.5">
+          <div className="rounded-xl border border-border bg-background p-3">
+            <p className="text-sm font-semibold">Pay from balance (prefunded)</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              If you topped up first, confirm and enter your PIN. Your rupiah balance is debited by{" "}
+              <span className="font-medium text-foreground">exactly the bill</span>. Cheapest — like
+              a travel card.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-background p-3">
+            <p className="text-sm font-semibold">Quick Pay (pay as you go)</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              No balance? Tap Quick Pay — your card is charged for{" "}
+              <span className="font-medium text-foreground">exactly this bill</span> and the merchant
+              is paid, in one step. No pre-funding needed.
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Either way, the merchant is settled in real rupiah (Xendit sandbox) — never crypto.
+        </p>
+      </>
     ),
   },
   {
     n: "4",
-    t: "Deposit with USDC",
-    optional: true,
-    body: (
-      <p className="text-sm text-muted-foreground">
-        For crypto-native users: send Stellar testnet USDC to your Castel address and it converts
-        to rupiah.
-      </p>
-    ),
-  },
-  {
-    n: "5",
     t: "Cash out",
     optional: true,
     body: (
       <p className="text-sm text-muted-foreground">
-        Request cash and enter your PIN to get a pickup QR. The{" "}
-        <span className="font-[family-name:var(--font-mono)]">/agent</span> page scans it to release
-        the on-chain Soroban escrow and hand over rupiah.
+        Leftover balance isn&apos;t stranded. Request cash and enter your PIN to get a pickup QR;
+        the <span className="font-[family-name:var(--font-mono)]">/agent</span> page scans it to
+        release the on-chain Soroban escrow and hand over rupiah.
       </p>
     ),
   },
@@ -115,9 +145,22 @@ export default function GuidePage() {
           How to test Castel
         </h1>
         <p className="mt-3 text-base text-muted-foreground">
-          A five-minute walkthrough of the full flow — sign in on WhatsApp, top up with a card, pay
-          a merchant, and cash out. Follow the steps in order.
+          A five-minute walkthrough of the full flow — sign in on WhatsApp, add money, pay a
+          merchant, and cash out. Follow the steps in order.
         </p>
+
+        <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <p className="text-sm font-semibold">Two ways to fund, two ways to pay</p>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Castel works like a travel wallet <span className="font-medium text-foreground">or</span>{" "}
+            pay-as-you-go. Fund it by <span className="font-medium text-foreground">card</span> (any
+            tourist) or by <span className="font-medium text-foreground">USDC</span> (crypto
+            holders). Then either{" "}
+            <span className="font-medium text-foreground">pay from your balance</span> (prefund, like
+            a travel card) or use <span className="font-medium text-foreground">Quick Pay</span> to
+            charge your card for a single bill. Steps 2 and 3 show all four.
+          </p>
+        </div>
       </div>
 
       {/* Step 0 — prerequisites */}
