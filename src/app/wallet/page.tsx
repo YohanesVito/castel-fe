@@ -61,6 +61,7 @@ export default function WalletPage() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ m: string; ok: boolean } | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   // Either we arrived from a WhatsApp magic link, or we already hold a session.
   useEffect(() => {
@@ -983,7 +984,7 @@ export default function WalletPage() {
             Recent activity
           </h2>
           <div className="mt-2 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            {history.map((tx) => (
+            {(showAllHistory ? history : history.slice(0, 5)).map((tx) => (
               <div key={tx.id} className="flex items-center gap-3 px-4 py-3">
                 <div
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm ${
@@ -1022,6 +1023,14 @@ export default function WalletPage() {
               </div>
             ))}
           </div>
+          {history.length > 5 && (
+            <button
+              onClick={() => setShowAllHistory((v) => !v)}
+              className="mt-3 w-full py-2 text-center text-sm font-medium text-primary transition active:scale-[0.99]"
+            >
+              {showAllHistory ? "View less" : `View more (${history.length - 5})`}
+            </button>
+          )}
         </section>
       )}
 
