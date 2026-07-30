@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Balances, type Limits, type Quote, type Tx } from "@/lib/api";
@@ -587,9 +588,12 @@ export default function WalletPage() {
                       >
                         {busy ? "Redirecting…" : "Top up with card"}
                       </button>
-                      <p className="mt-2 text-center text-[11px] text-white/70">
-                        Test card 4242 4242 4242 4242 · any future date · any CVC
-                      </p>
+                      <Link
+                        href="/guide"
+                        className="mt-2 flex items-center justify-center gap-1 text-center text-[11px] text-white/80 underline underline-offset-2"
+                      >
+                        Testing? See the guide for the test card →
+                      </Link>
                     </>
                   )}
                 </>
@@ -601,7 +605,7 @@ export default function WalletPage() {
                       disabled={busy}
                       className="w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
                     >
-                      {busy ? "Connecting…" : "Connect wallet (Freighter)"}
+                      {busy ? "Connecting…" : "Connect Wallet"}
                     </button>
                   ) : (
                     <>
@@ -790,10 +794,24 @@ export default function WalletPage() {
                           flash("Address copied");
                         }
                       }}
-                      className="mt-3 w-full break-all rounded-lg bg-white/20 px-3 py-2 text-left font-[family-name:var(--font-mono)] text-[11px] transition active:scale-[0.99]"
+                      className="mt-3 flex w-full items-start gap-2 rounded-lg bg-white/20 px-3 py-2 text-left font-[family-name:var(--font-mono)] text-[11px] transition active:scale-[0.99]"
                     >
-                      {wal?.publicKey ?? "…"}
-                      <span className="ml-1 opacity-70">· tap to copy</span>
+                      <span className="min-w-0 flex-1 break-all">{wal?.publicKey ?? "…"}</span>
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.8}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mt-0.5 shrink-0 opacity-70"
+                        aria-label="Copy"
+                      >
+                        <rect x="9" y="9" width="11" height="11" rx="2" />
+                        <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                      </svg>
                     </button>
                     <button
                       onClick={convertUsdc}
@@ -903,6 +921,26 @@ export default function WalletPage() {
               Money-changer figure is an estimate: market rate minus a typical Rp 200/USD
               markdown.
             </p>
+          </div>
+        )}
+
+        {Number(amount) > usdc && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning/40 bg-warning-soft px-3 py-2.5 text-sm text-warning">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="mt-0.5 shrink-0"
+            >
+              <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+              <path d="M12 9v4M12 17h.01" />
+            </svg>
+            <span>Amount is more than your USDC balance.</span>
           </div>
         )}
 
