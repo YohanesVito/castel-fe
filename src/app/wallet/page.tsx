@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Balances, type Limits, type Quote, type Tx } from "@/lib/api";
@@ -725,21 +724,6 @@ export default function WalletPage() {
           )}
         </div>
       </section>
-
-      <div className="animate-rise mt-4 grid grid-cols-2 gap-3">
-        <Link
-          href="/pay"
-          className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card py-4 font-semibold shadow-sm transition active:scale-[0.99]"
-        >
-          <span>📷</span> Pay QRIS
-        </Link>
-        <Link
-          href="/cashout"
-          className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card py-4 font-semibold shadow-sm transition active:scale-[0.99]"
-        >
-          <span>💵</span> Get cash
-        </Link>
-      </div>
 
       {usdc > 0 && (
       <section className="animate-rise mt-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
