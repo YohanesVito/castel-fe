@@ -107,3 +107,23 @@ export function sendUsdc(params: {
     ),
   );
 }
+
+/** Native XLM balance of the connected wallet (null if the account isn't funded yet). */
+export async function nativeBalance(address: string): Promise<number | null> {
+  try {
+    const acc = await horizon.loadAccount(address);
+    const line = acc.balances.find((b) => b.asset_type === "native");
+    return line ? Number(line.balance) : 0;
+  } catch {
+    return null;
+  }
+}
+
+/** Send native XLM from the connected wallet to the Castel treasury. */
+export function sendXlm(params: { from: string; to: string; amount: string }): Promise<string> {
+  return signAndSubmit(params.from, (b) =>
+    b.addOperation(
+      Operation.payment({ destination: params.to, asset: Asset.native(), amount: params.amount }),
+    ),
+  );
+}

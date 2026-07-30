@@ -13,8 +13,10 @@ import {
   addTrustline,
   connectWallet,
   disconnectWallet,
+  nativeBalance,
   onTestnet,
   sendUsdc,
+  sendXlm,
   usdcBalance,
   walletNetworkPassphrase,
 } from "@/lib/stellar-wallet";
@@ -51,6 +53,8 @@ export default function WalletPage() {
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
   const [circle, setCircle] = useState<{ castel: string; issuer: string } | null>(null);
   const [walBal, setWalBal] = useState<number | null>(null); // USDC in the connected wallet; null = no trustline
+  const [xlmBal, setXlmBal] = useState<number | null>(null); // native XLM in the connected wallet
+  const [cryptoAsset, setCryptoAsset] = useState<"xlm" | "usdc">("xlm");
   const [netOk, setNetOk] = useState(true);
   const [askPin, setAskPin] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
@@ -272,7 +276,9 @@ export default function WalletPage() {
       setNetOk(onTestnet(await walletNetworkPassphrase()));
       const prep = await api.depositCirclePrepare(); // trustlines the Castel address + returns the issuer
       setCircle({ castel: prep.publicKey, issuer: prep.asset.issuer });
-      setWalBal(await usdcBalance(addr, prep.asset.issuer));
+      const [u, x] = await Promise.all([usdcBalance(addr, prep.asset.issuer), nativeBalance(addr)]);
+      setWalBal(u);
+      setXlmBal(x);
     } catch (e) {
       flash(walletErr(e), false);
     } finally {
@@ -287,6 +293,7 @@ export default function WalletPage() {
     setWalletAddr(null);
     setCircle(null);
     setWalBal(null);
+    setXlmBal(null);
     setNetOk(true);
   }
 
@@ -316,6 +323,30 @@ export default function WalletPage() {
       const res = await api.depositCircleConvert();
       setBalances(res.balances);
       setWalBal(await usdcBalance(walletAddr, circle.issuer));
+      flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
+      setShowDeposit(false);
+      refresh();
+    } catch (e) {
+      flash(walletErr(e), false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Native XLM deposit: pay XLM straight to the treasury, then convert verifies by hash.
+  async function depositXlm() {
+    if (!walletAddr) return;
+    const amt = Number(depAmt);
+    if (!amt || amt <= 0) return flash("Enter an amount", false);
+    if (xlmBal != null && amt > xlmBal) return flash("Not enough XLM in your wallet", false);
+    setBusy(true);
+    try {
+      const prep = await api.depositXlmPrepare();
+      const hash = await sendXlm({ from: walletAddr, to: prep.destination, amount: String(amt) });
+      flash("Sent from your wallet — converting…");
+      const res = await api.depositXlmConvert(hash);
+      setBalances(res.balances);
+      setXlmBal(await nativeBalance(walletAddr));
       flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
       setShowDeposit(false);
       refresh();
@@ -599,83 +630,153 @@ export default function WalletPage() {
                         </p>
                       )}
 
-                      {walBal == null ? (
-                        <>
-                          <p className="mt-3 text-xs text-white/80">
-                            Your wallet needs a USDC trustline before it can hold testnet USDC.
-                          </p>
+                      <div className="mt-3 flex rounded-full bg-white/15 p-0.5 text-xs font-medium">
+                        {(["xlm", "usdc"] as const).map((a) => (
                           <button
-                            onClick={trustWallet}
-                            disabled={busy || !netOk}
-                            className="mt-2 w-full rounded-full bg-white/90 py-2 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                            key={a}
+                            onClick={() => setCryptoAsset(a)}
+                            className={`flex-1 rounded-full py-1.5 transition ${
+                              cryptoAsset === a ? "bg-white text-primary shadow" : "text-white/80"
+                            }`}
                           >
-                            {busy ? "Adding…" : "Add USDC trustline"}
-                          </button>
-                        </>
-                      ) : (
-                        <p className="mt-3 text-xs text-white/80">
-                          Wallet holds{" "}
-                          <span className="font-[family-name:var(--font-mono)]">
-                            {walBal.toFixed(2)}
-                          </span>{" "}
-                          USDC
-                        </p>
-                      )}
-
-                      <a
-                        href="https://faucet.circle.com"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 block text-[11px] text-white/70 underline underline-offset-2"
-                      >
-                        Need testnet USDC? Get it from Circle&apos;s faucet (Stellar Testnet) ↗
-                      </a>
-
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="font-[family-name:var(--font-mono)] text-lg">$</span>
-                        <input
-                          type="number"
-                          value={depAmt}
-                          onChange={(e) => setDepAmt(e.target.value)}
-                          className="w-full min-w-0 rounded-lg bg-white/90 px-3 py-2 font-[family-name:var(--font-mono)] text-lg text-foreground outline-none"
-                        />
-                      </div>
-                      <div className="mt-2 flex gap-2">
-                        {[20, 50, 100].map((v) => (
-                          <button
-                            key={v}
-                            type="button"
-                            onClick={() => setDepAmt(String(v))}
-                            className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium transition active:scale-95"
-                          >
-                            ${v}
+                            {a === "xlm" ? "XLM" : "USDC"}
                           </button>
                         ))}
                       </div>
-                      {depQuote && (
-                        <div className="mt-3 rounded-lg bg-white/20 px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="opacity-80">You get</span>
-                            <span className="font-[family-name:var(--font-mono)] font-bold">
-                              {idr(depQuote.cidrOut)}
-                            </span>
+
+                      {cryptoAsset === "usdc" ? (
+                        <>
+                          {walBal == null ? (
+                            <>
+                              <p className="mt-3 text-xs text-white/80">
+                                Your wallet needs a USDC trustline before it can hold testnet USDC.
+                              </p>
+                              <button
+                                onClick={trustWallet}
+                                disabled={busy || !netOk}
+                                className="mt-2 w-full rounded-full bg-white/90 py-2 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                              >
+                                {busy ? "Adding…" : "Add USDC trustline"}
+                              </button>
+                            </>
+                          ) : (
+                            <p className="mt-3 text-xs text-white/80">
+                              Wallet holds{" "}
+                              <span className="font-[family-name:var(--font-mono)]">
+                                {walBal.toFixed(2)}
+                              </span>{" "}
+                              USDC
+                            </p>
+                          )}
+
+                          <a
+                            href="https://faucet.circle.com"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 block text-[11px] text-white/70 underline underline-offset-2"
+                          >
+                            Need testnet USDC? Get it from Circle&apos;s faucet (Stellar Testnet) ↗
+                          </a>
+
+                          <div className="mt-3 flex items-center gap-2">
+                            <span className="font-[family-name:var(--font-mono)] text-lg">$</span>
+                            <input
+                              type="number"
+                              value={depAmt}
+                              onChange={(e) => setDepAmt(e.target.value)}
+                              className="w-full min-w-0 rounded-lg bg-white/90 px-3 py-2 font-[family-name:var(--font-mono)] text-lg text-foreground outline-none"
+                            />
                           </div>
-                          <div className="mt-1 flex items-center justify-between text-xs opacity-80">
-                            <span>vs money changer (est.)</span>
-                            <span className="font-[family-name:var(--font-mono)]">
-                              {depQuote.savingsIdr >= 0 ? "+" : ""}
-                              {idr(depQuote.savingsIdr)}
-                            </span>
+                          <div className="mt-2 flex gap-2">
+                            {[20, 50, 100].map((v) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => setDepAmt(String(v))}
+                                className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium transition active:scale-95"
+                              >
+                                ${v}
+                              </button>
+                            ))}
                           </div>
-                        </div>
+                          {depQuote && (
+                            <div className="mt-3 rounded-lg bg-white/20 px-3 py-2 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="opacity-80">You get</span>
+                                <span className="font-[family-name:var(--font-mono)] font-bold">
+                                  {idr(depQuote.cidrOut)}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between text-xs opacity-80">
+                                <span>vs money changer (est.)</span>
+                                <span className="font-[family-name:var(--font-mono)]">
+                                  {depQuote.savingsIdr >= 0 ? "+" : ""}
+                                  {idr(depQuote.savingsIdr)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          <button
+                            onClick={depositViaWallet}
+                            disabled={busy || !netOk || walBal == null}
+                            className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                          >
+                            {busy ? "Depositing…" : `Deposit ${depAmt || 0} USDC →`}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {xlmBal != null && xlmBal > 0 ? (
+                            <p className="mt-3 text-xs text-white/80">
+                              Wallet holds{" "}
+                              <span className="font-[family-name:var(--font-mono)]">
+                                {xlmBal.toFixed(2)}
+                              </span>{" "}
+                              XLM
+                            </p>
+                          ) : (
+                            <p className="mt-3 text-xs text-white/80">
+                              No XLM in this wallet yet — open Freighter and tap{" "}
+                              <span className="font-medium text-white">Fund with Friendbot</span> on
+                              Testnet.
+                            </p>
+                          )}
+
+                          <div className="mt-3 flex items-center gap-2">
+                            <span className="font-[family-name:var(--font-mono)] text-sm text-white/80">
+                              XLM
+                            </span>
+                            <input
+                              type="number"
+                              value={depAmt}
+                              onChange={(e) => setDepAmt(e.target.value)}
+                              className="w-full min-w-0 rounded-lg bg-white/90 px-3 py-2 font-[family-name:var(--font-mono)] text-lg text-foreground outline-none"
+                            />
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            {[10, 50, 100].map((v) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => setDepAmt(String(v))}
+                                className="rounded-full bg-white/20 px-3 py-1 text-xs font-medium transition active:scale-95"
+                              >
+                                {v}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-[11px] text-white/60">
+                            Converted at the live XLM rate, minus a 0.3% spread.
+                          </p>
+                          <button
+                            onClick={depositXlm}
+                            disabled={busy || !netOk || !xlmBal}
+                            className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                          >
+                            {busy ? "Depositing…" : `Deposit ${depAmt || 0} XLM →`}
+                          </button>
+                        </>
                       )}
-                      <button
-                        onClick={depositViaWallet}
-                        disabled={busy || !netOk || walBal == null}
-                        className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
-                      >
-                        {busy ? "Depositing…" : `Deposit ${depAmt || 0} USDC →`}
-                      </button>
                     </>
                   )}
 
