@@ -51,7 +51,7 @@ export type PayResult = {
 
 export type Tx = {
   id: number;
-  type: "swap" | "pay" | "cashout" | "deposit";
+  type: "swap" | "pay" | "cashout" | "deposit" | "quickpay";
   title: string;
   amountIdr: number;
   direction: "in" | "out";

@@ -593,7 +593,7 @@ export default function WalletPage() {
                         href="/guide"
                         className="mt-2 flex items-center justify-center gap-1 text-center text-[11px] text-white/80 underline underline-offset-2"
                       >
-                        Testing? See the guide for the test card →
+                        Testing? See the guide for the test card
                       </Link>
                     </>
                   )}
@@ -993,14 +993,21 @@ export default function WalletPage() {
                 >
                   {tx.type === "swap"
                     ? "⇄"
-                    : tx.type === "pay"
+                    : tx.type === "pay" || tx.type === "quickpay"
                       ? "↑"
                       : tx.type === "deposit"
                         ? "＋"
                         : "↓"}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{tx.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium">{tx.title}</p>
+                    {tx.type === "quickpay" && (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        Quick Pay
+                      </span>
+                    )}
+                  </div>
                   {tx.hash && /^[a-f0-9]{64}$/i.test(tx.hash) && (
                     <a
                       href={EXPLORER + tx.hash}
