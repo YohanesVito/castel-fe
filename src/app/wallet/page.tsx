@@ -30,9 +30,12 @@ const toNum = (s: string) => Number(s);
 function walletErr(e: unknown): string {
   const m = (e as Error)?.message ?? String(e);
   if (/reject|denied|declin|cancel/i.test(m)) return "Cancelled in wallet";
-  if (/not.*install|no wallet|unavailable|not found/i.test(m)) return "No wallet found — install Freighter";
+  if (/not.*install|no wallet|unavailable/i.test(m)) return "No wallet found — install Freighter";
+  // Horizon 404s when the account doesn't exist on-chain yet (never funded).
+  if (/not found|404|does not exist|resource missing/i.test(m))
+    return "This wallet isn't funded on testnet yet — use Friendbot in Freighter first";
   if (/op_no_trust|no_trust/i.test(m)) return "Your wallet has no USDC trustline yet";
-  if (/op_underfunded|underfunded/i.test(m)) return "Not enough USDC in your wallet";
+  if (/op_underfunded|underfunded/i.test(m)) return "Not enough balance in your wallet";
   return m;
 }
 
@@ -286,6 +289,17 @@ export default function WalletPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Re-read the connected wallet's balances (e.g. after the user funds it with Friendbot).
+  async function reloadBalances() {
+    if (!walletAddr || !circle) return;
+    const [u, x] = await Promise.all([
+      usdcBalance(walletAddr, circle.issuer),
+      nativeBalance(walletAddr),
+    ]);
+    setWalBal(u);
+    setXlmBal(x);
   }
 
   async function disconnect() {
@@ -644,7 +658,20 @@ export default function WalletPage() {
 
                       {cryptoAsset === "usdc" ? (
                         <>
-                          {walBal == null ? (
+                          {xlmBal === null ? (
+                            <p className="mt-3 text-xs text-white/80">
+                              This wallet isn&apos;t funded on testnet yet. In Freighter (Testnet),
+                              tap <span className="font-medium text-white">Fund with Friendbot</span>,
+                              then{" "}
+                              <button
+                                onClick={reloadBalances}
+                                className="underline underline-offset-2"
+                              >
+                                refresh
+                              </button>
+                              .
+                            </p>
+                          ) : walBal == null ? (
                             <>
                               <p className="mt-3 text-xs text-white/80">
                                 Your wallet needs a USDC trustline before it can hold testnet USDC.
@@ -736,7 +763,14 @@ export default function WalletPage() {
                             <p className="mt-3 text-xs text-white/80">
                               No XLM in this wallet yet — open Freighter and tap{" "}
                               <span className="font-medium text-white">Fund with Friendbot</span> on
-                              Testnet.
+                              Testnet, then{" "}
+                              <button
+                                onClick={reloadBalances}
+                                className="underline underline-offset-2"
+                              >
+                                refresh
+                              </button>
+                              .
                             </p>
                           )}
 
