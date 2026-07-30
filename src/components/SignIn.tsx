@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api, type Session } from "@/lib/api";
 import { setToken } from "@/lib/session";
+import { PhoneInput } from "@/components/PhoneInput";
 
 export function SignIn({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
   const [phone, setPhone] = useState("");
@@ -14,7 +15,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
   async function sendCode() {
     const wa = phone.trim();
     if (!/^\+\d{8,15}$/.test(wa)) {
-      setError("Enter your number with country code, e.g. +14155551234");
+      setError("Enter your WhatsApp number (digits only — pick your country on the left).");
       return;
     }
     setBusy(true);
@@ -56,15 +57,9 @@ export function SignIn({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
 
         {stage === "phone" ? (
           <>
-            <input
-              type="tel"
-              value={phone}
-              autoFocus
-              onChange={(e) => setPhone(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendCode()}
-              placeholder="+14155551234"
-              className="mt-6 w-full rounded-xl border border-border bg-background px-4 py-3 font-[family-name:var(--font-mono)] outline-none focus:border-primary"
-            />
+            <div className="mt-6">
+              <PhoneInput onChange={setPhone} onEnter={sendCode} autoFocus />
+            </div>
             <button
               onClick={sendCode}
               disabled={busy}
