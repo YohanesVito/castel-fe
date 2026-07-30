@@ -844,7 +844,8 @@ export default function WalletPage() {
               key={v}
               type="button"
               onClick={() => setAmount(String(v))}
-              className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition active:scale-95"
+              disabled={v > usdc}
+              className="rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition active:scale-95 disabled:opacity-40"
             >
               ${v}
             </button>
@@ -859,7 +860,7 @@ export default function WalletPage() {
           </button>
         </div>
 
-        {quote && (
+        {quote && Number(amount) <= usdc && (
           <div className="mt-4 space-y-3 rounded-xl bg-muted/60 p-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">You receive</span>
@@ -895,7 +896,7 @@ export default function WalletPage() {
                   quote.savingsIdr >= 0 ? "text-success" : "text-muted-foreground"
                 }`}
               >
-                {quote.savingsIdr >= 0 ? "💰 You save" : "Difference"}
+                {quote.savingsIdr >= 0 ? "You save" : "Difference"}
               </span>
               <span
                 className={`font-[family-name:var(--font-mono)] font-bold ${
@@ -912,9 +913,15 @@ export default function WalletPage() {
           </div>
         )}
 
+        {Number(amount) > usdc && (
+          <p className="mt-4 text-sm text-destructive">
+            You only have {usdc.toFixed(2)} USDC — tap Max.
+          </p>
+        )}
+
         <button
           onClick={swap}
-          disabled={busy || !quote}
+          disabled={busy || !quote || Number(amount) > usdc || Number(amount) <= 0}
           className="mt-5 w-full rounded-full bg-gradient-to-r from-primary to-primary-end py-3.5 font-semibold text-primary-foreground shadow-md transition active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? "Processing…" : "Exchange now"}
