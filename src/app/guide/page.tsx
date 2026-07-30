@@ -51,7 +51,7 @@ const steps = [
               <Mono>4242 4242 4242 4242</Mono>, any future expiry{" "}
               <span className="font-[family-name:var(--font-mono)]">12/34</span>, any CVC{" "}
               <span className="font-[family-name:var(--font-mono)]">123</span>. The card is saved,
-              so the next top-up is one tap. USDC is auto-converted to rupiah on Stellar.
+              so the next top-up is one tap. Your balance is credited as rupiah on Stellar.
             </p>
           </div>
           <div className="rounded-xl border border-border bg-background p-3">
@@ -60,7 +60,7 @@ const steps = [
               For crypto-native users. On the{" "}
               <span className="font-medium text-foreground">Crypto</span> tab, tap{" "}
               <span className="font-medium text-foreground">
-                &ldquo;Connect wallet (Freighter)&rdquo;
+                &ldquo;Connect Wallet &rdquo;
               </span>{" "}
               and send real Circle USDC straight from your wallet — it converts to rupiah at the
               reference rate. To try it on testnet:

@@ -821,7 +821,7 @@ export default function WalletPage() {
       <section className="animate-rise mt-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <h2 className="font-[family-name:var(--font-heading)] text-lg font-semibold">Exchange to rupiah</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Your card top-up didn&apos;t finish converting. Exchange it here.
+          Convert USDC held in your wallet to rupiah.
         </p>
 
         <label className="mt-4 block text-sm text-muted-foreground">USDC amount</label>
