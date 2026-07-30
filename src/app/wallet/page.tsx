@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Balances, type Limits, type Quote, type Tx } from "@/lib/api";
 import { clearSession, getToken, setToken, takeLinkToken } from "@/lib/session";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import { PinPrompt } from "@/components/PinPrompt";
 import { SignIn } from "@/components/SignIn";
 import { idr } from "@/lib/format";
@@ -403,6 +404,8 @@ export default function WalletPage() {
           </div>
         </div>
       </header>
+
+      <InstallPrompt />
 
       {!hasPin && (
         <button
