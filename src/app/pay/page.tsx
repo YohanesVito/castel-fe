@@ -368,7 +368,7 @@ export default function PayPage() {
             className={
               short
                 ? "mt-3 w-full rounded-full bg-gradient-to-r from-primary to-primary-end py-3.5 font-semibold text-primary-foreground shadow-md transition active:scale-[0.98] disabled:opacity-50"
-                : "mt-3 w-full rounded-full border border-border py-3 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50"
+                : "mt-3 w-full rounded-full border-2 border-primary py-3 font-semibold text-primary transition active:scale-[0.98] disabled:opacity-50"
             }
           >
             {busy ? "…" : `Quick pay ${idr(due)} with card →`}
