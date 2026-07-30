@@ -39,13 +39,13 @@ const steps = [
       <>
         <p className="text-sm text-muted-foreground">
           Tap <span className="font-medium text-foreground">&ldquo;+ Add money&rdquo;</span>. The
-          sheet has a <span className="font-medium text-foreground">Card</span> and a{" "}
-          <span className="font-medium text-foreground">USDC</span> tab — either way, your balance
+          sheet has a <span className="font-medium text-foreground">Fiat</span> and a{" "}
+          <span className="font-medium text-foreground">Crypto</span> tab — either way, your balance
           ends up in <span className="font-medium text-foreground">rupiah</span>.
         </p>
         <div className="mt-3 space-y-2.5">
           <div className="rounded-xl border border-border bg-background p-3">
-            <p className="text-sm font-semibold">💳 Card (fiat)</p>
+            <p className="text-sm font-semibold">Fiat (card)</p>
             <p className="mt-1 text-sm text-muted-foreground">
               For any tourist. Enter an amount, pay on Stripe with TEST card{" "}
               <Mono>4242 4242 4242 4242</Mono>, any future expiry{" "}
@@ -55,10 +55,10 @@ const steps = [
             </p>
           </div>
           <div className="rounded-xl border border-border bg-background p-3">
-            <p className="text-sm font-semibold">⭐ USDC (crypto) — connect your wallet</p>
+            <p className="text-sm font-semibold">Crypto — connect your wallet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              For crypto-native users. On the <span className="font-medium text-foreground">USDC</span>{" "}
-              tab, tap{" "}
+              For crypto-native users. On the{" "}
+              <span className="font-medium text-foreground">Crypto</span> tab, tap{" "}
               <span className="font-medium text-foreground">
                 &ldquo;Connect wallet (Freighter)&rdquo;
               </span>{" "}

@@ -488,7 +488,7 @@ export default function WalletPage() {
                       depMode === m ? "bg-white text-primary shadow" : "text-white/80"
                     }`}
                   >
-                    {m === "card" ? "Card" : "USDC"}
+                    {m === "card" ? "Fiat" : "Crypto"}
                   </button>
                 ))}
               </div>
@@ -572,19 +572,13 @@ export default function WalletPage() {
               ) : (
                 <>
                   {!walletAddr ? (
-                    <>
-                      <p className="text-xs text-white/80">
-                        Crypto investor? Connect a Stellar wallet and deposit real testnet USDC — it
-                        converts to rupiah at the reference rate.
-                      </p>
-                      <button
-                        onClick={connect}
-                        disabled={busy}
-                        className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
-                      >
-                        {busy ? "Connecting…" : "⭐ Connect wallet (Freighter)"}
-                      </button>
-                    </>
+                    <button
+                      onClick={connect}
+                      disabled={busy}
+                      className="w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {busy ? "Connecting…" : "Connect wallet (Freighter)"}
+                    </button>
                   ) : (
                     <>
                       <div className="flex items-center justify-between rounded-lg bg-white/20 px-3 py-2 text-xs">
