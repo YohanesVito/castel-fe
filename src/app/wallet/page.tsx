@@ -485,7 +485,7 @@ export default function WalletPage() {
                       depMode === m ? "bg-white text-primary shadow" : "text-white/80"
                     }`}
                   >
-                    {m === "card" ? "💳 Card" : "⭐ USDC"}
+                    {m === "card" ? "Card" : "USDC"}
                   </button>
                 ))}
               </div>
