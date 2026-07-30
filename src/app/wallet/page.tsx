@@ -500,13 +500,6 @@ export default function WalletPage() {
               >
                 + Add money
               </button>
-              <button
-                onClick={topup}
-                disabled={busy}
-                className="text-xs text-white/70 underline underline-offset-2 transition active:scale-95 disabled:opacity-50"
-              >
-                instant demo
-              </button>
             </div>
           ) : (
             <div className="rounded-xl bg-white/15 p-3 backdrop-blur">
@@ -911,12 +904,6 @@ export default function WalletPage() {
               markdown.
             </p>
           </div>
-        )}
-
-        {Number(amount) > usdc && (
-          <p className="mt-4 text-sm text-destructive">
-            You only have {usdc.toFixed(2)} USDC — tap Max.
-          </p>
         )}
 
         <button
