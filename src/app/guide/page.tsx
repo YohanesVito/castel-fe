@@ -55,14 +55,62 @@ const steps = [
             </p>
           </div>
           <div className="rounded-xl border border-border bg-background p-3">
-            <p className="text-sm font-semibold">⭐ USDC (crypto)</p>
+            <p className="text-sm font-semibold">⭐ USDC (crypto) — connect your wallet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              For crypto-native users. The USDC tab shows your Stellar address + QR — send Stellar
-              USDC to it, then tap{" "}
-              <span className="font-medium text-foreground">&ldquo;convert to rupiah&rdquo;</span>.
-              To try it on testnet, tap{" "}
-              <span className="font-medium text-foreground">&ldquo;get 200 test USDC&rdquo;</span>{" "}
-              first.
+              For crypto-native users. On the <span className="font-medium text-foreground">USDC</span>{" "}
+              tab, tap{" "}
+              <span className="font-medium text-foreground">
+                &ldquo;Connect wallet (Freighter)&rdquo;
+              </span>{" "}
+              and send real Circle USDC straight from your wallet — it converts to rupiah at the
+              reference rate. To try it on testnet:
+            </p>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+              <li>
+                Install the{" "}
+                <a
+                  href="https://www.freighter.app"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary underline underline-offset-2"
+                >
+                  Freighter
+                </a>{" "}
+                extension and switch it to <span className="font-medium text-foreground">Testnet</span>
+                , then fund it with the built-in Friendbot.
+              </li>
+              <li>
+                In Castel: <span className="font-medium text-foreground">Connect wallet</span>, then{" "}
+                <span className="font-medium text-foreground">&ldquo;Add USDC trustline&rdquo;</span>{" "}
+                (one signature).
+              </li>
+              <li>
+                Get testnet USDC from{" "}
+                <a
+                  href="https://faucet.circle.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary underline underline-offset-2"
+                >
+                  faucet.circle.com
+                </a>{" "}
+                — paste your Freighter address, network{" "}
+                <span className="font-medium text-foreground">Stellar Testnet</span>.
+              </li>
+              <li>
+                Back in Castel, enter an amount and tap{" "}
+                <span className="font-medium text-foreground">&ldquo;Deposit&rdquo;</span> — Freighter
+                asks you to sign, and rupiah lands.
+              </li>
+            </ol>
+            <p className="mt-2 text-sm text-muted-foreground">
+              No extension? Open{" "}
+              <span className="font-medium text-foreground">
+                &ldquo;No wallet extension? Send USDC manually&rdquo;
+              </span>{" "}
+              for an address+QR you can send to, or{" "}
+              <span className="font-medium text-foreground">&ldquo;get 200 test USDC&rdquo;</span> to
+              try it with no wallet at all.
             </p>
           </div>
         </div>
