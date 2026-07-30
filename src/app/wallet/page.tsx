@@ -592,7 +592,7 @@ export default function WalletPage() {
                         disabled={busy}
                         className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
                       >
-                        {busy ? "Redirecting…" : "Top up with card →"}
+                        {busy ? "Redirecting…" : "Top up with card"}
                       </button>
                       <p className="mt-2 text-center text-[11px] text-white/70">
                         Test card 4242 4242 4242 4242 · any future date · any CVC
@@ -995,7 +995,7 @@ export default function WalletPage() {
 
       {toast && (
         <div
-          className={`animate-rise fixed inset-x-0 bottom-6 mx-auto w-fit max-w-[90%] rounded-full px-5 py-3 text-center text-sm shadow-xl ${
+          className={`animate-rise fixed inset-x-0 bottom-28 z-50 mx-auto w-fit max-w-[90%] rounded-full px-5 py-3 text-center text-sm shadow-xl ${
             toast.ok ? "bg-foreground text-background" : "bg-destructive text-white"
           }`}
         >
