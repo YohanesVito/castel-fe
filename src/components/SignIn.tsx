@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type Session } from "@/lib/api";
 import { setToken } from "@/lib/session";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -11,6 +11,30 @@ export function SignIn({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
   const [stage, setStage] = useState<"phone" | "code">("phone");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The free-tier backend can cold-start ~30-60s. Warm it while the user reads/types, and only
+  // enable "Send code" once it responds — so the OTP request itself is instant. A 60s fallback
+  // enables the button regardless, so a slow/undetectable warm-up never traps the user.
+  const [warm, setWarm] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const startedAt = Date.now();
+    (async () => {
+      while (alive) {
+        if (await api.ping()) {
+          if (alive) setWarm(true);
+          return;
+        }
+        if (Date.now() - startedAt > 60_000) {
+          if (alive) setWarm(true);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function sendCode() {
     const wa = phone.trim();
@@ -62,11 +86,24 @@ export function SignIn({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
             </div>
             <button
               onClick={sendCode}
-              disabled={busy}
-              className="mt-4 w-full rounded-full bg-gradient-to-r from-primary to-primary-end py-3.5 font-semibold text-primary-foreground shadow-md transition active:scale-[0.98] disabled:opacity-50"
+              disabled={busy || !warm}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-primary-end py-3.5 font-semibold text-primary-foreground shadow-md transition active:scale-[0.98] disabled:opacity-60"
             >
-              {busy ? "Sending…" : "Send code on WhatsApp"}
+              {!warm && (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              )}
+              {busy
+                ? "Sending…"
+                : warm
+                  ? "Send code on WhatsApp"
+                  : "Waking the server…"}
             </button>
+            {!warm && (
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                First load can take ~30s on our free demo server — you can type your number
+                meanwhile.
+              </p>
+            )}
           </>
         ) : (
           <>

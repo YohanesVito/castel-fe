@@ -91,6 +91,17 @@ async function req<T>(path: string, opts?: { method?: string; body?: unknown }):
 }
 
 export const api = {
+  // Wake the free-tier backend (returns true once it responds). No auth, no DB — the `/` route
+  // is DB-free, so this warms the server without spending Neon's compute budget.
+  ping: async (): Promise<boolean> => {
+    try {
+      const res = await fetch(BASE + "/", { signal: AbortSignal.timeout(8000) });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
   authRequest: (waNumber: string) =>
     req<{ sent: boolean }>("/auth/request", { method: "POST", body: { waNumber } }),
   authVerify: (waNumber: string, otp: string) =>

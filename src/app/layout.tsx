@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { WarmBackend } from "@/components/WarmBackend";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const spaceGrotesk = Space_Grotesk({ variable: "--font-space-grotesk", subsets: ["latin"] });
@@ -28,6 +29,7 @@ export default function RootLayout({
     >
       <body className="min-h-full">
         {children}
+        <WarmBackend />
         <ServiceWorkerRegister />
       </body>
     </html>
