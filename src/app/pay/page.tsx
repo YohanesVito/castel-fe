@@ -23,6 +23,8 @@ export default function PayPage() {
   const [balance, setBalance] = useState<number | null>(null);
   const [stage, setStage] = useState<Stage>("scan");
   const [payload, setPayload] = useState("");
+  // A stable idempotency key per scanned bill, so a retry/double-tap can't pay the merchant twice.
+  const [payKey, setPayKey] = useState("");
   const [info, setInfo] = useState<QrisInfo | null>(null);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -141,6 +143,7 @@ export default function PayPage() {
     try {
       const decoded = await api.decodeQris(p);
       setPayload(p);
+      setPayKey(crypto.randomUUID());
       setInfo(decoded);
       setAmount(decoded.amount ? String(decoded.amount) : "");
       setStage("review");

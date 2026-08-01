@@ -11,6 +11,9 @@ export const horizon = new Horizon.Server(HORIZON_URL);
 // Bid well above the network minimum so the payment clears despite fee surges.
 const FEE = String(Number(BASE_FEE) * 100);
 
+// Stellar amounts allow at most 7 decimals and reject scientific notation; normalise before use.
+const stroopAmount = (amount: string) => Number(amount).toFixed(7);
+
 type Kit = typeof import("@creit.tech/stellar-wallets-kit").StellarWalletsKit;
 
 let inited = false;
@@ -102,7 +105,7 @@ export function sendUsdc(params: {
       Operation.payment({
         destination: params.to,
         asset: new Asset("USDC", params.issuer),
-        amount: params.amount,
+        amount: stroopAmount(params.amount),
       }),
     ),
   );
@@ -131,7 +134,11 @@ export function sendXlm(params: {
 }): Promise<string> {
   return signAndSubmit(params.from, (b) => {
     b.addOperation(
-      Operation.payment({ destination: params.to, asset: Asset.native(), amount: params.amount }),
+      Operation.payment({
+        destination: params.to,
+        asset: Asset.native(),
+        amount: stroopAmount(params.amount),
+      }),
     ).addMemo(Memo.id(params.memo));
   });
 }

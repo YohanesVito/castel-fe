@@ -116,7 +116,7 @@ export const api = {
   fund: (usdc: number) => req<Balances>("/fund", { method: "POST", body: { usdc } }),
   depositCreate: (usd: number) =>
     req<{ url: string }>("/deposit/create", { method: "POST", body: { usd } }),
-  depositCharge: (usd: number) =>
+  depositCharge: (usd: number, key?: string) =>
     req<{
       credited: boolean;
       usd: number;
@@ -124,7 +124,7 @@ export const api = {
       savingsIdr?: number;
       exchangeFailed?: string;
       balances: Balances;
-    }>("/deposit/charge", { method: "POST", body: { usd } }),
+    }>("/deposit/charge", { method: "POST", body: { usd, key } }),
   depositUsdcConvert: () =>
     req<{ credited: boolean; usdc: number; cidr: number; savingsIdr: number; balances: Balances }>(
       "/deposit/usdc/convert",
@@ -176,8 +176,11 @@ export const api = {
 
   decodeQris: (payload: string) =>
     req<QrisInfo>("/qris/decode", { method: "POST", body: { payload } }),
-  pay: (payload: string, pin: string, amount?: number) =>
-    req<PayResult>("/pay", { method: "POST", body: { payload, amount, pin } }),
+  pay: (payload: string, pin: string, amount?: number, key?: string) =>
+    req<PayResult & { alreadyPaid?: boolean }>("/pay", {
+      method: "POST",
+      body: { payload, amount, pin, key },
+    }),
   quickPayCreate: (payload: string, amount?: number) =>
     req<{ url: string; usd: number; amountIdr: number }>("/pay/quick/create", {
       method: "POST",
