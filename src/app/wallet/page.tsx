@@ -23,6 +23,7 @@ import {
 } from "@/lib/stellar-wallet";
 
 const EXPLORER = "https://stellar.expert/explorer/testnet/tx/";
+const WALLET_KEY = "castel-wallet-addr"; // persists the connected Stellar wallet across reloads
 
 const toNum = (s: string) => Number(s);
 
@@ -86,7 +87,6 @@ export default function WalletPage() {
   // so the user can retry the CONVERT only (never re-send and double-deposit).
   const [pending, setPending] = useState<{ asset: "xlm" | "usdc"; hash?: string } | null>(null);
   const [netOk, setNetOk] = useState(true);
-  const [askPin, setAskPin] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ m: string; ok: boolean } | null>(null);
@@ -130,7 +130,9 @@ export default function WalletPage() {
       setHistory(hist);
       setLimits(lim);
     } catch {
-      setBalances({ cIDR: "0", USDC: "0" });
+      // A transient fetch failure (cold backend, blip) must not wipe a balance we already have —
+      // that reads as "my deposit vanished". Only show Rp 0 on the very first load.
+      setBalances((b) => b ?? { cIDR: "0", USDC: "0" });
     }
   }, []);
 
@@ -385,23 +387,46 @@ export default function WalletPage() {
   }
 
   // Crypto on-ramp: connect a Stellar wallet, then send real Circle USDC straight from it.
+  // Load balances + Circle setup for a connected address, and remember it (localStorage) so the
+  // wallet stays "connected" across reloads — signing later re-prompts the extension, but the
+  // user never re-runs the connect modal. Read-only (no extension calls), so restore is silent.
+  async function afterConnect(addr: string) {
+    setWalletAddr(addr);
+    try {
+      localStorage.setItem(WALLET_KEY, addr);
+    } catch {}
+    // XLM needs no Circle setup — fetch it first so a failed prepare can't disable the XLM tab.
+    setXlmBal(await nativeBalance(addr));
+    try {
+      const prep = await api.depositCirclePrepare(); // trustlines the Castel address + returns the issuer
+      setCircle({ castel: prep.publicKey, issuer: prep.asset.issuer });
+      setWalBal(await usdcBalance(addr, prep.asset.issuer));
+    } catch {}
+  }
+
   async function connect() {
     setBusy(true);
     try {
       const addr = await connectWallet();
-      setWalletAddr(addr);
       setNetOk(onTestnet(await walletNetworkPassphrase()));
-      // XLM needs no Circle setup — fetch it first so a failed prepare can't disable the XLM tab.
-      setXlmBal(await nativeBalance(addr));
-      const prep = await api.depositCirclePrepare(); // trustlines the Castel address + returns the issuer
-      setCircle({ castel: prep.publicKey, issuer: prep.asset.issuer });
-      setWalBal(await usdcBalance(addr, prep.asset.issuer));
+      await afterConnect(addr);
     } catch (e) {
       flash(walletErr(e), false);
     } finally {
       setBusy(false);
     }
   }
+
+  // Restore a previously-connected wallet on load, so the user isn't asked to connect every visit.
+  useEffect(() => {
+    if (!waNumber || walletAddr) return;
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(WALLET_KEY);
+    } catch {}
+    if (stored) afterConnect(stored).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waNumber]);
 
   // Re-read the connected wallet's balances (e.g. after the user funds it with Friendbot). Also
   // retries the Circle prepare if it failed at connect, so the USDC tab can recover.
@@ -422,6 +447,9 @@ export default function WalletPage() {
   async function disconnect() {
     try {
       await disconnectWallet();
+    } catch {}
+    try {
+      localStorage.removeItem(WALLET_KEY);
     } catch {}
     setWalletAddr(null);
     setCircle(null);
@@ -586,7 +614,6 @@ export default function WalletPage() {
     try {
       await api.setPin(pin);
       setHasPin(true);
-      setAskPin(false);
       flash("PIN set — you can now pay and cash out");
     } catch (e) {
       setPinError((e as Error).message);
@@ -611,6 +638,33 @@ export default function WalletPage() {
           setHasPin(s.hasPin);
         }}
       />
+    );
+  }
+
+  // Onboarding, not a nudge: the PIN is created in the same sitting as the OTP, before any
+  // money can arrive. A wallet that can be funded before it can be defended is the wrong order.
+  if (!hasPin) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6">
+        <div className="animate-rise">
+          <h1 className="font-[family-name:var(--font-heading)] text-3xl font-bold">
+            One last step
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            Create the 6-digit PIN you&apos;ll use every time you spend.
+          </p>
+        </div>
+        <PinPrompt
+          confirm
+          mandatory
+          title="Create your PIN"
+          subtitle="Six digits. You'll enter it every time you spend — even if someone else gets into your WhatsApp."
+          busy={busy}
+          error={pinError}
+          onSubmit={createPin}
+          onCancel={() => {}}
+        />
+      </main>
     );
   }
 
@@ -642,37 +696,6 @@ export default function WalletPage() {
       </header>
 
       <InstallPrompt />
-
-      {!hasPin && (
-        <button
-          onClick={() => {
-            setPinError(null);
-            setAskPin(true);
-          }}
-          className="animate-rise mt-2 flex w-full items-center gap-3 rounded-2xl border border-warning/40 bg-warning-soft px-4 py-3 text-left"
-        >
-          <span className="text-lg">🔒</span>
-          <span className="flex-1">
-            <span className="block text-sm font-semibold">Set your payment PIN</span>
-            <span className="block text-xs text-muted-foreground">
-              Required before you can pay or cash out.
-            </span>
-          </span>
-          <span className="text-muted-foreground">›</span>
-        </button>
-      )}
-
-      {askPin && (
-        <PinPrompt
-          confirm
-          title="Create your PIN"
-          subtitle="Six digits. You'll enter it every time you spend — even if someone else gets into your WhatsApp."
-          busy={busy}
-          error={pinError}
-          onSubmit={createPin}
-          onCancel={() => setAskPin(false)}
-        />
-      )}
 
       <section className="animate-rise mt-2 rounded-2xl bg-gradient-to-br from-primary to-primary-end p-6 text-primary-foreground shadow-lg">
         <p className="text-sm opacity-80">Your balance</p>
