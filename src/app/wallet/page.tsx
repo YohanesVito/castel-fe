@@ -16,6 +16,7 @@ import {
   disconnectWallet,
   nativeBalance,
   onTestnet,
+  restoreWallet,
   sendUsdc,
   sendXlm,
   usdcBalance,
@@ -23,7 +24,6 @@ import {
 } from "@/lib/stellar-wallet";
 
 const EXPLORER = "https://stellar.expert/explorer/testnet/tx/";
-const WALLET_KEY = "castel-wallet-addr"; // persists the connected Stellar wallet across reloads
 
 const toNum = (s: string) => Number(s);
 
@@ -387,14 +387,11 @@ export default function WalletPage() {
   }
 
   // Crypto on-ramp: connect a Stellar wallet, then send real Circle USDC straight from it.
-  // Load balances + Circle setup for a connected address, and remember it (localStorage) so the
-  // wallet stays "connected" across reloads — signing later re-prompts the extension, but the
-  // user never re-runs the connect modal. Read-only (no extension calls), so restore is silent.
+  // Load balances + Circle setup for a connected address. The Stellar Wallets Kit persists the
+  // connection itself (activeAddress in localStorage), so we don't store it — this just hydrates
+  // the UI. Read-only (no extension calls), so it's silent.
   async function afterConnect(addr: string) {
     setWalletAddr(addr);
-    try {
-      localStorage.setItem(WALLET_KEY, addr);
-    } catch {}
     // XLM needs no Circle setup — fetch it first so a failed prepare can't disable the XLM tab.
     setXlmBal(await nativeBalance(addr));
     try {
@@ -417,14 +414,13 @@ export default function WalletPage() {
     }
   }
 
-  // Restore a previously-connected wallet on load, so the user isn't asked to connect every visit.
+  // Restore a previously-connected wallet on load via the Kit's own persistence, so the user isn't
+  // asked to connect every visit (getAddress returns the remembered address without a modal).
   useEffect(() => {
     if (!waNumber || walletAddr) return;
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(WALLET_KEY);
-    } catch {}
-    if (stored) afterConnect(stored).catch(() => {});
+    restoreWallet().then((addr) => {
+      if (addr) afterConnect(addr).catch(() => {});
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waNumber]);
 
@@ -446,10 +442,7 @@ export default function WalletPage() {
 
   async function disconnect() {
     try {
-      await disconnectWallet();
-    } catch {}
-    try {
-      localStorage.removeItem(WALLET_KEY);
+      await disconnectWallet(); // clears the Kit's persisted activeAddress too
     } catch {}
     setWalletAddr(null);
     setCircle(null);

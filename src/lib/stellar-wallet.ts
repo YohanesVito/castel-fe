@@ -41,6 +41,21 @@ export async function connectWallet(): Promise<string> {
   return address;
 }
 
+/**
+ * If a wallet was connected in a previous session, return its address WITHOUT opening the modal.
+ * The Kit persists the active address + selected wallet in localStorage and restores them on
+ * init, so `getAddress()` returns the remembered address silently (null if none / not restorable).
+ */
+export async function restoreWallet(): Promise<string | null> {
+  try {
+    const k = await kit();
+    const { address } = await k.getAddress();
+    return address || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function disconnectWallet(): Promise<void> {
   const k = await kit();
   await k.disconnect();
