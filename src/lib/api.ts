@@ -111,6 +111,11 @@ export const api = {
 
   me: () => req<{ waNumber: string; publicKey: string; hasPin: boolean }>("/me"),
   setPin: (pin: string) => req<{ ok: boolean }>("/me/pin", { method: "POST", body: { pin } }),
+  // Forgot PIN: the link is always delivered over WhatsApp, never returned here — receiving
+  // it is the proof of ownership. Redeeming it hands back a fresh session.
+  pinResetLink: () => req<{ sent: boolean }>("/me/pin/reset-link", { method: "POST" }),
+  pinReset: (token: string, pin: string) =>
+    req<Session>("/auth/pin/reset", { method: "POST", body: { token, pin } }),
   balance: () => req<Balances>("/me/balance"),
   limits: () => req<Limits>("/me/limits"),
   history: () => req<Tx[]>("/me/history"),
@@ -124,6 +129,7 @@ export const api = {
     }>("/me/wallet"),
 
   quote: (usdc: number) => req<Quote>(`/fx/quote?usdc=${usdc}`),
+  xlmQuote: (xlm: number) => req<Quote>(`/fx/xlm-quote?xlm=${xlm}`),
   fund: (usdc: number) => req<Balances>("/fund", { method: "POST", body: { usdc } }),
   depositCreate: (usd: number) =>
     req<{ url: string }>("/deposit/create", { method: "POST", body: { usd } }),

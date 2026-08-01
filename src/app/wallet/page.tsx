@@ -76,6 +76,7 @@ export default function WalletPage() {
   const [depMode, setDepMode] = useState<"card" | "usdc">("card");
   const [depAmt, setDepAmt] = useState("200");
   const [depQuote, setDepQuote] = useState<Quote | null>(null);
+  const [xlmQuote, setXlmQuote] = useState<Quote | null>(null); // rupiah preview for an XLM amount
   const [wal, setWal] = useState<Awaited<ReturnType<typeof api.wallet>> | null>(null);
   const [usdcQr, setUsdcQr] = useState<string | null>(null);
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
@@ -173,6 +174,23 @@ export default function WalletPage() {
     }, 350);
     return () => clearTimeout(t);
   }, [depAmt]);
+
+  // Live rupiah preview for the XLM amount (XLM→USD→cIDR), shown in the Crypto → XLM tab.
+  useEffect(() => {
+    const xlm = Number(depAmt);
+    const t = setTimeout(async () => {
+      if (cryptoAsset !== "xlm" || !xlm || xlm <= 0) {
+        setXlmQuote(null);
+        return;
+      }
+      try {
+        setXlmQuote(await api.xlmQuote(xlm));
+      } catch {
+        setXlmQuote(null);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [depAmt, cryptoAsset]);
 
   const flash = (m: string, ok = true) => {
     setToast({ m, ok });
@@ -1005,6 +1023,23 @@ export default function WalletPage() {
                               </button>
                             ))}
                           </div>
+                          {xlmQuote && (
+                            <div className="mt-3 rounded-lg bg-white/20 px-3 py-2 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="opacity-80">You get</span>
+                                <span className="font-[family-name:var(--font-mono)] font-bold">
+                                  {idr(xlmQuote.cidrOut)}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between text-xs opacity-80">
+                                <span>vs money changer (est.)</span>
+                                <span className="font-[family-name:var(--font-mono)]">
+                                  {xlmQuote.savingsIdr >= 0 ? "+" : ""}
+                                  {idr(xlmQuote.savingsIdr)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                           <p className="mt-2 text-[11px] text-white/60">
                             Converted at the live XLM rate, minus a 0.3% spread.
                           </p>
