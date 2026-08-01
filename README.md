@@ -30,7 +30,7 @@ This repo (**castel-fe**) is the web wallet. The full system is three repos:
 
 | Repo | What it is | Stack |
 |---|---|---|
-| **castel-fe** (this repo) | Web wallet — camera scan, card top-up, PIN | Next.js 16 · Tailwind 4 · Bun |
+| **castel-fe** (this repo) | Web wallet (PWA) — camera scan, card top-up, connect-wallet crypto deposit, PIN | Next.js 16 · Tailwind 4 · Bun |
 | **[castel-be](https://github.com/CastelPay/castel-be)** | API, custody, FX, settlement, auth | Hono · Bun · Postgres · stellar-sdk |
 | **[castel-sc](https://github.com/CastelPay/castel-sc)** | Soroban escrow contract (Rust) | Rust · soroban-sdk |
 
@@ -63,19 +63,22 @@ flowchart LR
     BE["⚙️ castel-be<br/>API · custody · FX"]
     SC["📜 castel-sc<br/>Soroban escrow"]
 
+    Wallet(["👛 Stellar wallet<br/>Freighter"])
+
     Twilio["📨 Twilio"]
     Stripe["💳 Stripe<br/>card → USD"]
     Xendit["🏦 Xendit<br/>→ IDR"]
-    Stellar["⭐ Stellar<br/>DEX · path payment · cIDR"]
+    Stellar["⭐ Stellar<br/>cIDR · escrow · DEX (USDC swap)"]
 
     Tourist -->|chats| WA
     WA <-->|magic link| Twilio
     Twilio <--> BE
     Tourist -->|scan · pay by card| FE
+    Wallet -->|USDC / XLM deposit| FE
     FE <-->|signed session| BE
 
     BE -->|charge| Stripe
-    BE -->|USDC → cIDR| Stellar
+    BE -->|credit cIDR @ reference rate| Stellar
     BE -->|lock / release| SC --> Stellar
     BE -->|payout| Xendit -->|rupiah| Merchant
     Agent -->|hands cash| Tourist
@@ -90,9 +93,13 @@ flowchart LR
 web app exists only for the two things a chat cannot do — **use a camera** and **take a card
 number** — and reports back to the chat.
 
-The tourist never sees the word "crypto": they deposit dollars and their balance reads in
-rupiah, because the USDC→cIDR conversion happens the moment the card clears. Merchants and
-agents always touch **rupiah**, never a digital asset.
+The tourist never sees the word "crypto": they load a card in dollars and their balance
+reads in **rupiah**. The card charge clears at the PSP and Castel credits `cIDR` — a rupiah
+unit — straight to the user at the live USD/IDR reference rate (minus 30 bps); the fiat held
+at the PSP is the reserve. Nothing swaps on a DEX, nothing strands as an intermediate asset.
+Crypto-native visitors can instead **connect a Stellar wallet** and deposit real USDC or
+native XLM (an anchor-style flow, below). Merchants and agents always touch **rupiah**, never
+a digital asset.
 
 Detailed architecture (simple + full diagrams): **[castel-be/ARCHITECTURE.md](https://github.com/CastelPay/castel-be/blob/main/ARCHITECTURE.md)**.
 
@@ -105,8 +112,9 @@ Nothing in the core flow is mocked.
 | | |
 |---|---|
 | **QRIS** | Real EMVCo TLV parser — decodes live merchant QR codes |
-| **Card on-ramp** | Stripe Checkout (test mode) — a real card, charged in USD |
-| **FX** | Stellar **path payment** across the built-in DEX — a real on-chain swap, priced against the live USD/IDR rate |
+| **Card on-ramp** | Stripe Checkout (test mode) — a real card, charged in USD; cIDR credited directly at the reference rate, card saved for one-tap repeats |
+| **Crypto on-ramp** | Connect a Stellar wallet (Freighter, Albedo fallback) — deposit real Circle testnet **USDC** or native **XLM**; treasury takes it as reserve and issues cIDR |
+| **FX** | Card & Quick Pay credit cIDR at the live USD/IDR reference rate (−30 bps). A **Stellar path payment** across the built-in DEX powers the optional "exchange held USDC → rupiah" path — a real, slippage-bounded on-chain swap |
 | **Merchant settlement** | Xendit Disbursement API (sandbox) — a real IDR payout call |
 | **Cash-out** | Soroban escrow (`CDG65OKW…`) — hashlock, refund timelock, fee split, on-chain release |
 | **Messaging** | Twilio WhatsApp sandbox — signature-verified webhook |
@@ -118,8 +126,15 @@ Testnet and sandbox keys throughout; no real money moves. cIDR has no fiat backi
 
 ## Why Stellar
 
-- **Path payments** — `USDC → cIDR` is one atomic operation across the protocol's built-in
-  DEX, with a slippage bound from a live quote. No AMM to deploy, no router contract.
+- **Real wallet interop** — a tourist can **connect Freighter** (Albedo fallback, via Stellar
+  Wallets Kit) and fund a rupiah balance with real Circle testnet **USDC** or native **XLM**.
+  The treasury takes the crypto as reserve and issues cIDR at the reference rate, anchor-style
+  — an on-ramp from any Stellar wallet with no bridge and no custody hand-off.
+- **Path payments** — the optional "exchange held USDC → rupiah" path is one atomic
+  `USDC → cIDR` strict-send operation across the protocol's built-in DEX, slippage-bounded from
+  a live quote and backed by a distributor market maker. No AMM to deploy, no router contract.
+  (The card, Quick Pay, XLM and Circle-USDC rails all credit cIDR directly and never touch the
+  DEX.)
 - **Native assets + compliance flags** — cIDR is a classic Stellar asset carrying
   `AUTH_REVOCABLE` and clawback, the same issuance pattern as USDC, PYUSD and MoneyGram's
   MGUSD. No token contract needed; a SEP-41 contract would have *removed* the DEX and path
@@ -136,10 +151,13 @@ Indonesia).
 
 | Route | |
 |---|---|
-| `/wallet` | Sign in (WhatsApp OTP or magic link), set a PIN, top up by card, balance in **rupiah**, Tier 0 limit, history |
-| `/pay` | Full-screen QRIS scanner → confirm → PIN → paid. Offers a top-up if the balance is short |
+| `/wallet` | Sign in (WhatsApp OTP or magic link, with a country flag + dial-code picker), set a PIN, balance in **rupiah**, Tier 0 limit, history. Deposit sheet has a **Fiat** tab (card top-up) and a **Crypto** tab — connect a Stellar wallet and pick **XLM** or **USDC** |
+| `/pay` | Full-screen QRIS scanner → confirm → PIN → paid. **Pay from balance** (cIDR is already rupiah) or **Quick Pay** (charge the card for the bill, credit cIDR, settle the merchant) if the balance is short |
 | `/cashout` | Request cash → PIN → a pickup QR to show a money-changer agent |
 | `/agent` | The agent's side: scan the pickup QR, release the Soroban escrow |
+
+Ships as an **installable PWA** with an "Install Castel" prompt, and a mobile-first bottom nav
+with a single **Pay** button.
 
 **Auth.** The wallet holds a signed session token, never a phone number — obtained only by
 proving control of the WhatsApp number (OTP or magic link). Spending requires a 6-digit PIN
