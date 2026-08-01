@@ -149,7 +149,7 @@ export const api = {
   // Native XLM on-ramp: prepare returns the treasury to pay, convert verifies the XLM
   // payment by hash and credits rupiah.
   depositXlmPrepare: () =>
-    req<{ destination: string }>("/deposit/xlm/prepare", { method: "POST" }),
+    req<{ destination: string; memo: string }>("/deposit/xlm/prepare", { method: "POST" }),
   depositXlmConvert: (hash: string) =>
     req<{
       credited: boolean;

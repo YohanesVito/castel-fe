@@ -358,7 +358,12 @@ export default function WalletPage() {
     setBusy(true);
     try {
       const prep = await api.depositXlmPrepare();
-      const hash = await sendXlm({ from: walletAddr, to: prep.destination, amount: String(amt) });
+      const hash = await sendXlm({
+        from: walletAddr,
+        to: prep.destination,
+        amount: String(amt),
+        memo: prep.memo,
+      });
       flash("Sent from your wallet — converting…");
       const res = await api.depositXlmConvert(hash);
       setBalances(res.balances);

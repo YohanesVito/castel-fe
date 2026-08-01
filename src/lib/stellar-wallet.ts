@@ -2,7 +2,7 @@
 // Stellar Wallets Kit. Used by the crypto on-ramp: the user signs a real Circle-USDC payment
 // from their own wallet to their Castel address. Everything here must run client-side only —
 // the Kit registers web components, so imports are deferred to call time.
-import { Asset, BASE_FEE, Horizon, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
+import { Asset, BASE_FEE, Horizon, Memo, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
 const NETWORK_PASSPHRASE = Networks.TESTNET;
@@ -119,11 +119,19 @@ export async function nativeBalance(address: string): Promise<number | null> {
   }
 }
 
-/** Send native XLM from the connected wallet to the Castel treasury. */
-export function sendXlm(params: { from: string; to: string; amount: string }): Promise<string> {
-  return signAndSubmit(params.from, (b) =>
+/**
+ * Send native XLM from the connected wallet to the Castel treasury, stamped with the MEMO_ID
+ * from /deposit/xlm/prepare so the backend can bind the payment to this user.
+ */
+export function sendXlm(params: {
+  from: string;
+  to: string;
+  amount: string;
+  memo: string;
+}): Promise<string> {
+  return signAndSubmit(params.from, (b) => {
     b.addOperation(
       Operation.payment({ destination: params.to, asset: Asset.native(), amount: params.amount }),
-    ),
-  );
+    ).addMemo(Memo.id(params.memo));
+  });
 }
