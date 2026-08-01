@@ -151,17 +151,34 @@ Indonesia).
 
 | Route | |
 |---|---|
-| `/wallet` | Sign in (WhatsApp OTP or magic link, with a country flag + dial-code picker), set a PIN, balance in **rupiah**, Tier 0 limit, history. Deposit sheet has a **Fiat** tab (card top-up) and a **Crypto** tab — connect a Stellar wallet and pick **XLM** or **USDC** |
+| `/wallet` | Sign in (WhatsApp OTP or magic link, with a country flag + dial-code picker); a brand-new user first completes a mandatory **"One last step"** PIN screen before the wallet loads. Balance in **rupiah**, Tier 0 limit, history. Deposit sheet has a **Fiat** tab (card top-up) and a **Crypto** tab — connect a Stellar wallet and pick **XLM** or **USDC** |
 | `/pay` | Full-screen QRIS scanner → confirm → PIN → paid. **Pay from balance** (cIDR is already rupiah) or **Quick Pay** (charge the card for the bill, credit cIDR, settle the merchant) if the balance is short |
 | `/cashout` | Request cash → PIN → a pickup QR to show a money-changer agent |
 | `/agent` | The agent's side: scan the pickup QR, release the Soroban escrow |
+| `/reset-pin` | Landing page for the single-use, 15-min WhatsApp reset link — sets a new PIN and returns a fresh session. The token in the link is the whole authorisation; it never appears in-app |
 
 Ships as an **installable PWA** with an "Install Castel" prompt, and a mobile-first bottom nav
-with a single **Pay** button.
+with a single **Pay** button. Some smaller touches:
+
+- **Wallet-connect persistence** — the connected Stellar wallet (Freighter) is remembered
+  across reloads via the Stellar Wallets Kit's native persistence, so there is no reconnect
+  every visit.
+- **XLM rupiah preview** — the Crypto → **XLM** tab shows a live "You get Rp X / vs money
+  changer" preview, matching the card and USDC tabs.
+- **Deposit result card** — every deposit outcome (card, saved card, Circle USDC, native XLM,
+  manual USDC) renders in a colored result card under Add money, not a fleeting toast.
+- **Cold-start warm-up** — the free-tier backend is warmed on page load, and the sign-in
+  "Send code" button waits until it is ready ("Waking the server…") so the first OTP is instant.
 
 **Auth.** The wallet holds a signed session token, never a phone number — obtained only by
 proving control of the WhatsApp number (OTP or magic link). Spending requires a 6-digit PIN
-that never travels through the chat. See **[castel-be/SECURITY.md](https://github.com/CastelPay/castel-be/blob/main/SECURITY.md)**.
+that never travels through the chat. **Setting a PIN is mandatory onboarding:** on first
+sign-in a new user must complete the "One last step" screen before the wallet loads, and weak
+PINs (sequential `123456`, repeated `111111`) are rejected. A PIN locks after 5 wrong tries
+and routes to the forgot-PIN flow, where the bot sends a **single-use, 15-min WhatsApp link**
+to `/reset-pin` — receiving that link is itself the proof of ownership, so it is never shown
+in-app. If a PIN is changed, the owner can **freeze the account from WhatsApp** (reply `BLOCK`
+to the alert), which blocks spending until it is lifted. See **[castel-be/SECURITY.md](https://github.com/CastelPay/castel-be/blob/main/SECURITY.md)**.
 
 **Stellar metadata.** [`public/.well-known/stellar.toml`](https://castelpay.vercel.app/.well-known/stellar.toml)
 publishes the cIDR asset and Castel accounts (SEP-1). On-chain transactions link out to
