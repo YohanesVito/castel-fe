@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import QRCode from "qrcode";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type Balances, type Limits, type Quote, type Tx } from "@/lib/api";
 import { clearSession, getToken, setToken, takeLinkToken } from "@/lib/session";
 import { BottomNav } from "@/components/BottomNav";
@@ -25,6 +25,29 @@ import {
 const EXPLORER = "https://stellar.expert/explorer/testnet/tx/";
 
 const toNum = (s: string) => Number(s);
+
+const isStellarHash = (h?: string) => !!h && /^[a-f0-9]{64}$/i.test(h);
+
+// The outcome of a top-up, shown as a card under "Add money" instead of a toast — a deposit is
+// the one moment a user needs a receipt they can read, and a 3.5s toast is routinely missed.
+// Every rail (card, saved card, Circle USDC, XLM, manual USDC, testnet faucet) reports here.
+type DepositOutcome = {
+  status: "success" | "pending" | "info" | "error";
+  method: string;
+  title?: string;
+  cidr?: number;
+  paid?: string;
+  savingsIdr?: number;
+  hash?: string;
+  note?: string;
+};
+
+const OUTCOME_TITLE: Record<DepositOutcome["status"], string> = {
+  success: "Money added",
+  pending: "Top-up in progress",
+  info: "Top-up update",
+  error: "Top-up failed",
+};
 
 // Wallet extensions throw terse, uneven errors; map the common ones to something a tester reads.
 function walletErr(e: unknown): string {
@@ -67,7 +90,12 @@ export default function WalletPage() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ m: string; ok: boolean } | null>(null);
+  const [depResult, setDepResult] = useState<DepositOutcome | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  // Idempotency key for the saved-card charge; stable across retries, reset on a new amount.
+  const chargeKeyRef = useRef("");
+  // Stripe session ids already confirmed this mount, so the confirm effect never double-fires.
+  const confirmedRef = useRef<Set<string>>(new Set());
 
   // Either we arrived from a WhatsApp magic link, or we already hold a session.
   useEffect(() => {
@@ -128,6 +156,8 @@ export default function WalletPage() {
 
   useEffect(() => {
     const usd = Number(depAmt);
+    // A new amount is a new charge intent, so a retry of the previous one can't dedup against it.
+    chargeKeyRef.current = "";
     const t = setTimeout(async () => {
       if (!usd || usd <= 0) {
         setDepQuote(null);
@@ -146,6 +176,36 @@ export default function WalletPage() {
     setToast({ m, ok });
     setTimeout(() => setToast(null), 3500);
   };
+
+  // The result card lives at the top of the page; the crypto sheet is tall enough that finishing
+  // a deposit can leave the user scrolled past it.
+  const report = (o: DepositOutcome) => {
+    setDepResult(o);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Both card rails return the same shape. `credited: false` means the hash was already
+  // reserved — a replayed confirm — so nothing was added and it must not read as a top-up.
+  const reportCard = (
+    res: { credited: boolean; usd: number; cidr?: number; savingsIdr?: number },
+    method: string,
+  ) =>
+    report(
+      res.credited
+        ? {
+            status: "success",
+            method,
+            cidr: res.cidr,
+            paid: `$${res.usd}`,
+            savingsIdr: res.savingsIdr,
+          }
+        : {
+            status: "info",
+            method,
+            title: "Already added",
+            note: "This payment was already credited to your balance — you have not been charged twice.",
+          },
+    );
 
   const PENDING_KEY = "castel-pending-convert";
   const savePending = (p: { asset: "xlm" | "usdc"; hash?: string } | null) => {
@@ -174,9 +234,18 @@ export default function WalletPage() {
     if (!ready || !waNumber) return;
     const dep = new URLSearchParams(window.location.search).get("deposit");
     if (!dep) return;
+    // Confirm each session id at most once (Strict Mode / re-mount can fire this effect twice
+    // before the URL is cleaned; the backend is idempotent, but don't double-request).
+    if (confirmedRef.current.has(dep)) return;
+    confirmedRef.current.add(dep);
     const cleanUrl = () => window.history.replaceState({}, "", "/wallet");
     if (dep === "cancel") {
-      flash("Deposit cancelled", false);
+      report({
+        status: "info",
+        method: "Card",
+        title: "Top-up cancelled",
+        note: "You weren't charged. Tap Add money to try again.",
+      });
       cleanUrl();
       return;
     }
@@ -185,15 +254,14 @@ export default function WalletPage() {
       try {
         const res = await api.depositConfirm(dep);
         setBalances(res.balances);
-        flash(
-          res.cidr
-            ? `${idr(res.cidr)} added — ${idr(res.savingsIdr ?? 0)} more than a money changer`
-            : `$${res.usd} added — exchange pending`,
-          !res.exchangeFailed,
-        );
+        reportCard(res, "Card");
         refresh();
       } catch (e) {
-        flash("Couldn't confirm deposit: " + (e as Error).message, false);
+        report({
+          status: "error",
+          method: "Card",
+          note: "Couldn't confirm your top-up: " + (e as Error).message,
+        });
       } finally {
         setBusy(false);
         cleanUrl();
@@ -223,12 +291,19 @@ export default function WalletPage() {
 
   async function topup() {
     setBusy(true);
+    setDepResult(null);
     try {
       await api.fund(200);
       await refresh();
-      flash("Topped up 200 USDC");
+      report({
+        status: "info",
+        method: "Testnet",
+        title: "Test USDC added",
+        paid: "200 USDC",
+        note: "200 test USDC is now in your Castel wallet. Convert it to rupiah to finish the top-up.",
+      });
     } catch (e) {
-      flash("Top-up failed: " + (e as Error).message, false);
+      report({ status: "error", method: "Testnet", note: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -241,11 +316,16 @@ export default function WalletPage() {
       return;
     }
     setBusy(true);
+    setDepResult(null);
     try {
       const { url } = await api.depositCreate(usd);
       window.location.href = url;
     } catch (e) {
-      flash("Couldn't start deposit: " + (e as Error).message, false);
+      report({
+        status: "error",
+        method: "Card",
+        note: "Couldn't start the top-up: " + (e as Error).message,
+      });
       setBusy(false);
     }
   }
@@ -259,23 +339,24 @@ export default function WalletPage() {
       return;
     }
     setBusy(true);
+    setDepResult(null);
+    // Reuse one key across retries of the same charge so a timed-out charge can't double-bill;
+    // cleared on a new amount (effect below) and on success.
+    if (!chargeKeyRef.current) chargeKeyRef.current = crypto.randomUUID();
     try {
-      const res = await api.depositCharge(usd);
+      const res = await api.depositCharge(usd, chargeKeyRef.current);
+      chargeKeyRef.current = "";
       setBalances(res.balances);
-      flash(
-        res.cidr
-          ? `${idr(res.cidr)} added — ${idr(res.savingsIdr ?? 0)} more than a money changer`
-          : `$${res.usd} added — exchange pending`,
-        !res.exchangeFailed,
-      );
       setShowDeposit(false);
+      reportCard(res, `Card •••• ${wal?.cardLast4 ?? ""}`.trim());
       refresh();
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
+        chargeKeyRef.current = "";
         await startDeposit();
         return;
       }
-      flash("Top-up failed: " + (e as Error).message, false);
+      report({ status: "error", method: "Card", note: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -283,14 +364,21 @@ export default function WalletPage() {
 
   async function convertUsdc() {
     setBusy(true);
+    setDepResult(null);
     try {
       const res = await api.depositUsdcConvert();
       setBalances(res.balances);
-      flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
       setShowDeposit(false);
+      report({
+        status: "success",
+        method: "USDC",
+        cidr: res.cidr,
+        paid: `${res.usdc} USDC`,
+        savingsIdr: res.savingsIdr,
+      });
       refresh();
     } catch (e) {
-      flash((e as Error).message, false);
+      report({ status: "error", method: "USDC", note: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -303,11 +391,11 @@ export default function WalletPage() {
       const addr = await connectWallet();
       setWalletAddr(addr);
       setNetOk(onTestnet(await walletNetworkPassphrase()));
+      // XLM needs no Circle setup — fetch it first so a failed prepare can't disable the XLM tab.
+      setXlmBal(await nativeBalance(addr));
       const prep = await api.depositCirclePrepare(); // trustlines the Castel address + returns the issuer
       setCircle({ castel: prep.publicKey, issuer: prep.asset.issuer });
-      const [u, x] = await Promise.all([usdcBalance(addr, prep.asset.issuer), nativeBalance(addr)]);
-      setWalBal(u);
-      setXlmBal(x);
+      setWalBal(await usdcBalance(addr, prep.asset.issuer));
     } catch (e) {
       flash(walletErr(e), false);
     } finally {
@@ -315,15 +403,20 @@ export default function WalletPage() {
     }
   }
 
-  // Re-read the connected wallet's balances (e.g. after the user funds it with Friendbot).
+  // Re-read the connected wallet's balances (e.g. after the user funds it with Friendbot). Also
+  // retries the Circle prepare if it failed at connect, so the USDC tab can recover.
   async function reloadBalances() {
-    if (!walletAddr || !circle) return;
-    const [u, x] = await Promise.all([
-      usdcBalance(walletAddr, circle.issuer),
-      nativeBalance(walletAddr),
-    ]);
-    setWalBal(u);
-    setXlmBal(x);
+    if (!walletAddr) return;
+    setXlmBal(await nativeBalance(walletAddr));
+    let issuer = circle?.issuer;
+    if (!issuer) {
+      try {
+        const prep = await api.depositCirclePrepare();
+        setCircle({ castel: prep.publicKey, issuer: prep.asset.issuer });
+        issuer = prep.asset.issuer;
+      } catch {}
+    }
+    if (issuer) setWalBal(await usdcBalance(walletAddr, issuer));
   }
 
   async function disconnect() {
@@ -360,22 +453,45 @@ export default function WalletPage() {
       if (walBal != null && amt > walBal) return flash("Not enough USDC in your wallet", false);
     }
     setBusy(true);
+    setDepResult(null);
+    let sent = resume;
     try {
       if (!resume) {
         // Mark pending BEFORE the send so that if convert fails we retry convert, not re-send.
         await sendUsdc({ from: walletAddr, to: circle.castel, issuer: circle.issuer, amount: String(amt) });
         savePending({ asset: "usdc" });
-        flash("Sent from your wallet — converting…");
+        sent = true;
+        report({
+          status: "pending",
+          method: "USDC",
+          paid: `${amt} USDC`,
+          note: "Sent from your wallet — converting to rupiah…",
+        });
       }
       const res = await api.depositCircleConvert();
       savePending(null);
       setBalances(res.balances);
       setWalBal(await usdcBalance(walletAddr, circle.issuer));
-      flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
       setShowDeposit(false);
+      report({
+        status: "success",
+        method: "USDC",
+        cidr: res.cidr,
+        paid: `${res.usdc} USDC`,
+        savingsIdr: res.savingsIdr,
+        hash: res.hash,
+      });
       refresh();
     } catch (e) {
-      flash(walletErr(e), false);
+      report({
+        status: "error",
+        method: "USDC",
+        note:
+          walletErr(e) +
+          (sent
+            ? " — your USDC did leave your wallet. Tap “Finish converting” to credit it; do not send again."
+            : ""),
+      });
     } finally {
       setBusy(false);
     }
@@ -388,9 +504,13 @@ export default function WalletPage() {
     const amt = Number(depAmt);
     if (!resume) {
       if (!amt || amt <= 0) return flash("Enter an amount", false);
-      if (xlmBal != null && amt > xlmBal) return flash("Not enough XLM in your wallet", false);
+      // Leave ~1.5 XLM for the base reserve + fee, or the on-chain payment underfunds.
+      if (xlmBal != null && amt > xlmBal - 1.5)
+        return flash("Leave ~1.5 XLM for the network reserve", false);
     }
     setBusy(true);
+    setDepResult(null);
+    let sent = resume;
     try {
       let hash = resume ? pending!.hash! : "";
       if (!hash) {
@@ -403,17 +523,39 @@ export default function WalletPage() {
         });
         // Persist the sent hash BEFORE converting so a convert failure retries convert, not send.
         savePending({ asset: "xlm", hash });
-        flash("Sent from your wallet — converting…");
+        sent = true;
+        report({
+          status: "pending",
+          method: "XLM",
+          paid: `${amt} XLM`,
+          hash,
+          note: "Sent from your wallet — converting to rupiah…",
+        });
       }
       const res = await api.depositXlmConvert(hash);
       savePending(null);
       setBalances(res.balances);
       setXlmBal(await nativeBalance(walletAddr));
-      flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
       setShowDeposit(false);
+      report({
+        status: "success",
+        method: "XLM",
+        cidr: res.cidr,
+        paid: `${res.xlm} XLM`,
+        savingsIdr: res.savingsIdr,
+        hash: res.hash,
+      });
       refresh();
     } catch (e) {
-      flash(walletErr(e), false);
+      report({
+        status: "error",
+        method: "XLM",
+        note:
+          walletErr(e) +
+          (sent
+            ? " — your XLM did leave your wallet. Tap “Finish converting” to credit it; do not send again."
+            : ""),
+      });
     } finally {
       setBusy(false);
     }
@@ -923,6 +1065,97 @@ export default function WalletPage() {
           )}
         </div>
       </section>
+
+      {depResult && (
+        <section
+          className={`animate-rise mt-4 rounded-2xl border p-5 shadow-sm ${
+            depResult.status === "error"
+              ? "border-destructive/30 bg-destructive/5"
+              : "border-primary/25 bg-primary-soft"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-semibold ${
+                depResult.status === "error"
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-primary/10 text-primary"
+              }`}
+              aria-hidden
+            >
+              {depResult.status === "success" ? "✓" : depResult.status === "error" ? "!" : "＋"}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="font-[family-name:var(--font-heading)] text-base font-semibold">
+                  {depResult.title ?? OUTCOME_TITLE[depResult.status]}
+                </h2>
+                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  {depResult.method}
+                </span>
+              </div>
+              {depResult.status === "success" && depResult.cidr != null && (
+                <p className="mt-1 font-[family-name:var(--font-mono)] text-3xl font-bold tracking-tight text-primary">
+                  +{idr(depResult.cidr)}
+                </p>
+              )}
+              {depResult.note && (
+                <p className="mt-1 text-sm text-muted-foreground">{depResult.note}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setDepResult(null)}
+              aria-label="Dismiss"
+              className="-mr-1 -mt-1 shrink-0 rounded-full px-2 py-1 text-lg leading-none text-muted-foreground transition active:scale-90"
+            >
+              ×
+            </button>
+          </div>
+
+          {(depResult.paid || depResult.savingsIdr != null || depResult.status === "success") && (
+            <dl className="mt-4 space-y-1.5 border-t border-primary/15 pt-3 text-sm">
+              {depResult.paid && (
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">You paid</dt>
+                  <dd className="font-[family-name:var(--font-mono)]">{depResult.paid}</dd>
+                </div>
+              )}
+              {depResult.savingsIdr != null && (
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">
+                    {depResult.savingsIdr >= 0 ? "You saved vs money changer" : "vs money changer"}
+                  </dt>
+                  <dd
+                    className={`font-[family-name:var(--font-mono)] font-semibold ${
+                      depResult.savingsIdr >= 0 ? "text-success" : "text-muted-foreground"
+                    }`}
+                  >
+                    {depResult.savingsIdr >= 0 ? "+" : ""}
+                    {idr(depResult.savingsIdr)}
+                  </dd>
+                </div>
+              )}
+              {depResult.status === "success" && (
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">New balance</dt>
+                  <dd className="font-[family-name:var(--font-mono)] font-semibold">{idr(cidr)}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+
+          {isStellarHash(depResult.hash) && (
+            <a
+              href={EXPLORER + depResult.hash}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-block text-xs font-medium text-primary underline underline-offset-2"
+            >
+              View on-chain ↗
+            </a>
+          )}
+        </section>
+      )}
 
       {usdc > 0 && (
       <section className="animate-rise mt-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
