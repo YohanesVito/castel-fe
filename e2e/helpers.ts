@@ -55,10 +55,12 @@ export async function setPin(page: Page, pin = PIN): Promise<void> {
   await expect(page.getByText("PIN set", { exact: false })).toBeVisible({ timeout: 30_000 });
 }
 
-/** Open Add money → USDC tab → tap the testnet faucet for 200 USDC. */
+/** Open Add money → Crypto tab → expand the manual sheet → tap the testnet faucet for 200 USDC. */
 export async function faucetUsdc(page: Page): Promise<void> {
   await page.getByRole("button", { name: "+ Add money" }).click();
-  await page.getByRole("button", { name: "⭐ USDC" }).click();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
+  // The demo faucet + manual convert now live under the "No wallet extension?" disclosure.
+  await page.getByText("No wallet extension? Send USDC manually").click();
   await page.getByRole("button", { name: "Testnet: get 200 test USDC" }).click();
   await expect(page.getByText("Topped up 200 USDC")).toBeVisible({ timeout: 90_000 });
 }
@@ -69,8 +71,16 @@ export async function faucetUsdc(page: Page): Promise<void> {
  * keeps the sheet open, so we retry until a "deposit" lands in Recent activity.
  */
 export async function convertUsdcToRupiah(page: Page): Promise<void> {
-  const convertBtn = page.getByRole("button", { name: "I've sent USDC — convert to rupiah" });
+  const convertBtn = page.getByRole("button", { name: "convert to rupiah" });
   const history = page.getByText("Recent activity");
+
+  // Ensure the manual disclosure is open (faucetUsdc opens it, but be defensive if called alone).
+  if (!(await convertBtn.isVisible().catch(() => false))) {
+    await page
+      .getByText("No wallet extension? Send USDC manually")
+      .click()
+      .catch(() => {});
+  }
 
   for (let attempt = 0; attempt < 2; attempt++) {
     // On success the sheet closes and the button vanishes — nothing left to retry.
