@@ -59,6 +59,9 @@ export default function WalletPage() {
   const [walBal, setWalBal] = useState<number | null>(null); // USDC in the connected wallet; null = no trustline
   const [xlmBal, setXlmBal] = useState<number | null>(null); // native XLM in the connected wallet
   const [cryptoAsset, setCryptoAsset] = useState<"xlm" | "usdc">("xlm");
+  // A crypto deposit whose on-chain send succeeded but whose convert didn't finish — persisted
+  // so the user can retry the CONVERT only (never re-send and double-deposit).
+  const [pending, setPending] = useState<{ asset: "xlm" | "usdc"; hash?: string } | null>(null);
   const [netOk, setNetOk] = useState(true);
   const [askPin, setAskPin] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
@@ -143,6 +146,27 @@ export default function WalletPage() {
     setToast({ m, ok });
     setTimeout(() => setToast(null), 3500);
   };
+
+  const PENDING_KEY = "castel-pending-convert";
+  const savePending = (p: { asset: "xlm" | "usdc"; hash?: string } | null) => {
+    setPending(p);
+    try {
+      if (p) localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+      else localStorage.removeItem(PENDING_KEY);
+    } catch {}
+  };
+  // Recover a crypto deposit whose convert didn't finish on a previous visit.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PENDING_KEY);
+      if (raw) {
+        const p = JSON.parse(raw) as { asset: "xlm" | "usdc"; hash?: string };
+        setPending(p);
+        setCryptoAsset(p.asset);
+        setDepMode("usdc");
+      }
+    } catch {}
+  }, []);
 
   // Back from Stripe Checkout: confirm the session, then credit is verified server-side.
   // Waits for `ready` — confirming needs the session token we may still be exchanging for.
@@ -329,14 +353,22 @@ export default function WalletPage() {
 
   async function depositViaWallet() {
     if (!walletAddr || !circle) return;
+    const resume = pending?.asset === "usdc";
     const amt = Number(depAmt);
-    if (!amt || amt <= 0) return flash("Enter an amount", false);
-    if (walBal != null && amt > walBal) return flash("Not enough USDC in your wallet", false);
+    if (!resume) {
+      if (!amt || amt <= 0) return flash("Enter an amount", false);
+      if (walBal != null && amt > walBal) return flash("Not enough USDC in your wallet", false);
+    }
     setBusy(true);
     try {
-      await sendUsdc({ from: walletAddr, to: circle.castel, issuer: circle.issuer, amount: String(amt) });
-      flash("Sent from your wallet — converting…");
+      if (!resume) {
+        // Mark pending BEFORE the send so that if convert fails we retry convert, not re-send.
+        await sendUsdc({ from: walletAddr, to: circle.castel, issuer: circle.issuer, amount: String(amt) });
+        savePending({ asset: "usdc" });
+        flash("Sent from your wallet — converting…");
+      }
       const res = await api.depositCircleConvert();
+      savePending(null);
       setBalances(res.balances);
       setWalBal(await usdcBalance(walletAddr, circle.issuer));
       flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
@@ -352,20 +384,29 @@ export default function WalletPage() {
   // Native XLM deposit: pay XLM straight to the treasury, then convert verifies by hash.
   async function depositXlm() {
     if (!walletAddr) return;
+    const resume = pending?.asset === "xlm" && !!pending.hash;
     const amt = Number(depAmt);
-    if (!amt || amt <= 0) return flash("Enter an amount", false);
-    if (xlmBal != null && amt > xlmBal) return flash("Not enough XLM in your wallet", false);
+    if (!resume) {
+      if (!amt || amt <= 0) return flash("Enter an amount", false);
+      if (xlmBal != null && amt > xlmBal) return flash("Not enough XLM in your wallet", false);
+    }
     setBusy(true);
     try {
-      const prep = await api.depositXlmPrepare();
-      const hash = await sendXlm({
-        from: walletAddr,
-        to: prep.destination,
-        amount: String(amt),
-        memo: prep.memo,
-      });
-      flash("Sent from your wallet — converting…");
+      let hash = resume ? pending!.hash! : "";
+      if (!hash) {
+        const prep = await api.depositXlmPrepare();
+        hash = await sendXlm({
+          from: walletAddr,
+          to: prep.destination,
+          amount: String(amt),
+          memo: prep.memo,
+        });
+        // Persist the sent hash BEFORE converting so a convert failure retries convert, not send.
+        savePending({ asset: "xlm", hash });
+        flash("Sent from your wallet — converting…");
+      }
       const res = await api.depositXlmConvert(hash);
+      savePending(null);
       setBalances(res.balances);
       setXlmBal(await nativeBalance(walletAddr));
       flash(`${idr(res.cidr)} added — ${idr(res.savingsIdr)} more than a money changer`);
@@ -748,10 +789,14 @@ export default function WalletPage() {
                           )}
                           <button
                             onClick={depositViaWallet}
-                            disabled={busy || !netOk || walBal == null}
+                            disabled={busy || !netOk || (pending?.asset !== "usdc" && walBal == null)}
                             className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
                           >
-                            {busy ? "Depositing…" : `Deposit ${depAmt || 0} USDC →`}
+                            {busy
+                              ? "Depositing…"
+                              : pending?.asset === "usdc"
+                                ? "Finish converting →"
+                                : `Deposit ${depAmt || 0} USDC →`}
                           </button>
                         </>
                       ) : (
@@ -807,10 +852,14 @@ export default function WalletPage() {
                           </p>
                           <button
                             onClick={depositXlm}
-                            disabled={busy || !netOk || !xlmBal}
+                            disabled={busy || !netOk || (pending?.asset !== "xlm" && !xlmBal)}
                             className="mt-3 w-full rounded-full bg-white py-2.5 text-sm font-semibold text-primary shadow transition active:scale-[0.98] disabled:opacity-50"
                           >
-                            {busy ? "Depositing…" : `Deposit ${depAmt || 0} XLM →`}
+                            {busy
+                              ? "Depositing…"
+                              : pending?.asset === "xlm"
+                                ? "Finish converting →"
+                                : `Deposit ${depAmt || 0} XLM →`}
                           </button>
                         </>
                       )}
