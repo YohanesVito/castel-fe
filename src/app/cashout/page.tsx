@@ -25,6 +25,20 @@ export default function CashoutPage() {
       .catch(() => {});
   }, []);
 
+  // Same as on the pay screen: recover the PIN over WhatsApp without losing this page.
+  async function sendResetLink() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.pinResetLink();
+      setError("Check WhatsApp — we sent you a link to set a new PIN.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function request(pin: string) {
     const amt = Number(amount);
     if (!amt) return;
@@ -109,6 +123,7 @@ export default function CashoutPage() {
               error={error}
               onSubmit={request}
               onCancel={() => setAskPin(false)}
+              onForgot={sendResetLink}
             />
           )}
         </div>

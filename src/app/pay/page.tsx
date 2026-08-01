@@ -167,6 +167,21 @@ export default function PayPage() {
     }
   }
 
+  // Locked out mid-payment: the reset link goes to WhatsApp, so the scanned bill stays on
+  // screen and the user comes back to it with a working PIN.
+  async function sendResetLink() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.pinResetLink();
+      setError("Check WhatsApp — we sent you a link to set a new PIN.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmPay(pin: string) {
     if (!info) return;
     setBusy(true);
@@ -395,6 +410,7 @@ export default function PayPage() {
               error={error}
               onSubmit={confirmPay}
               onCancel={() => setAskPin(false)}
+              onForgot={sendResetLink}
             />
           )}
           <button

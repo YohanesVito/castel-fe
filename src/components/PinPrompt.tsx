@@ -6,13 +6,26 @@ type Props = {
   title: string;
   subtitle: string;
   confirm?: boolean;
+  /** Onboarding: there is no wallet to go back to until the PIN exists, so no way out. */
+  mandatory?: boolean;
   busy?: boolean;
   error?: string | null;
   onSubmit: (pin: string) => void;
   onCancel: () => void;
+  onForgot?: () => void;
 };
 
-export function PinPrompt({ title, subtitle, confirm, busy, error, onSubmit, onCancel }: Props) {
+export function PinPrompt({
+  title,
+  subtitle,
+  confirm,
+  mandatory,
+  busy,
+  error,
+  onSubmit,
+  onCancel,
+  onForgot,
+}: Props) {
   const [pin, setPin] = useState("");
   const [again, setAgain] = useState("");
   const [mismatch, setMismatch] = useState(false);
@@ -70,9 +83,24 @@ export function PinPrompt({ title, subtitle, confirm, busy, error, onSubmit, onC
         >
           {busy ? "Please wait…" : confirm ? "Set PIN" : "Confirm"}
         </button>
-        <button onClick={onCancel} disabled={busy} className="mt-2 w-full py-2 text-sm text-muted-foreground">
-          Cancel
-        </button>
+        {!confirm && onForgot && (
+          <button
+            onClick={onForgot}
+            disabled={busy}
+            className="mt-3 w-full py-1 text-center text-sm font-medium text-primary underline underline-offset-2 disabled:opacity-50"
+          >
+            Forgot your PIN?
+          </button>
+        )}
+        {!mandatory && (
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="mt-2 w-full py-2 text-sm text-muted-foreground"
+          >
+            Cancel
+          </button>
+        )}
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
           Your PIN never travels through WhatsApp.

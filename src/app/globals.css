@@ -10,6 +10,7 @@
   --primary: #0052ff;
   --primary-end: #4d7cff;
   --primary-foreground: #ffffff;
+  --primary-soft: #eef3ff;
   --success: #16a34a;
   --success-soft: #f0fdf4;
   --warning: #b45309;
@@ -27,6 +28,7 @@
   --color-primary: var(--primary);
   --color-primary-end: var(--primary-end);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);

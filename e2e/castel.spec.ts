@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { signIn, setPin, faucetUsdc, convertUsdcToRupiah, fundRupiahBalance, uniquePhone, PIN } from "./helpers";
+import {
+  signIn,
+  setPin,
+  mintLinkToken,
+  faucetUsdc,
+  convertUsdcToRupiah,
+  fundRupiahBalance,
+  uniquePhone,
+  PIN,
+} from "./helpers";
 
 // End-to-end journeys against a live local stack (FE :3000 + BE :3001).
 // Each test signs in as a brand-new phone number so users, balances and limits never collide.
@@ -31,13 +40,25 @@ test.describe("Castel e2e", () => {
     await expect(page.getByText(wa)).toBeVisible();
   });
 
-  test("4. set a 6-digit PIN", async ({ page }) => {
+  test("4. a new number must set a PIN before the wallet opens", async ({ page }) => {
     const wa = uniquePhone();
-    await signIn(page, wa);
-    await expect(page.getByRole("button", { name: "Set your payment PIN" })).toBeVisible();
+    await page.goto(`/wallet?t=${encodeURIComponent(mintLinkToken(wa))}`);
+
+    await expect(page.getByRole("heading", { name: "One last step" })).toBeVisible({
+      timeout: 60_000,
+    });
+    // Onboarding, not a nudge: no wallet behind it and no way to dismiss it.
+    await expect(page.getByText("Your balance")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(0);
+
+    // A guessable PIN is refused by the backend before the wallet is reachable.
+    await setPin(page, "123456");
+    await expect(page.getByText("too easy to guess", { exact: false })).toBeVisible({
+      timeout: 30_000,
+    });
+
     await setPin(page);
-    // Once a PIN exists the prompt-to-set-it disappears.
-    await expect(page.getByRole("button", { name: "Set your payment PIN" })).toHaveCount(0);
+    await expect(page.getByText("Your balance")).toBeVisible({ timeout: 60_000 });
   });
 
   // -------------------------------------------------------------------------
@@ -73,7 +94,6 @@ test.describe("Castel e2e", () => {
       test.setTimeout(240_000);
       const wa = uniquePhone();
       await signIn(page, wa);
-      await setPin(page);
       await fundRupiahBalance(page);
 
       await page.goto("/pay");
@@ -97,7 +117,6 @@ test.describe("Castel e2e", () => {
       test.setTimeout(240_000);
       const wa = uniquePhone();
       await signIn(page, wa);
-      await setPin(page);
       await fundRupiahBalance(page);
 
       await page.goto("/cashout");

@@ -32,27 +32,33 @@ export function uniquePhone(): string {
   return "+62800" + Date.now() + Math.floor(Math.random() * 1000);
 }
 
-export const PIN = "123456";
+// Not "123456": the backend rejects runs and repeated digits (pinProblem in castel-be/src/lib/auth.ts).
+export const PIN = "394027";
 
 // ---------------------------------------------------------------------------
 // Flow helpers
 // ---------------------------------------------------------------------------
 
-/** Magic-link sign-in → lands on /wallet with the balance card rendered. */
-export async function signIn(page: Page, wa: string): Promise<void> {
+/**
+ * Magic-link sign-in. A new number lands on the mandatory PIN onboarding, not the wallet, so
+ * this completes it — every test past here needs a wallet that can actually spend.
+ */
+export async function signIn(page: Page, wa: string, pin = PIN): Promise<void> {
   const token = mintLinkToken(wa);
   await page.goto(`/wallet?t=${encodeURIComponent(token)}`);
+  await expect(page.getByRole("heading", { name: "One last step" })).toBeVisible({
+    timeout: 60_000,
+  });
+  await setPin(page, pin);
   await expect(page.getByText("Your balance")).toBeVisible({ timeout: 60_000 });
 }
 
-/** Create the 6-digit payment PIN via the wallet PIN prompt. */
+/** Fill the two-field PIN prompt that onboarding (or a reset) shows. */
 export async function setPin(page: Page, pin = PIN): Promise<void> {
-  await page.getByRole("button", { name: "Set your payment PIN" }).click();
   const fields = page.locator('input[type="password"]');
   await fields.nth(0).fill(pin);
   await fields.nth(1).fill(pin); // confirm field
   await page.getByRole("button", { name: "Set PIN" }).click();
-  await expect(page.getByText("PIN set", { exact: false })).toBeVisible({ timeout: 30_000 });
 }
 
 /** Open Add money → Crypto tab → expand the manual sheet → tap the testnet faucet for 200 USDC. */
