@@ -67,6 +67,12 @@ export default function WalletPage() {
   const [waNumber, setWaNumber] = useState<string | null>(null);
   const [hasPin, setHasPin] = useState(true);
   const [ready, setReady] = useState(false);
+  // True once boot has taken a few seconds (a cold free-tier backend), to explain the wait.
+  const [bootSlow, setBootSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setBootSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
   const [balances, setBalances] = useState<Balances | null>(null);
   const [history, setHistory] = useState<Tx[]>([]);
   const [limits, setLimits] = useState<Limits | null>(null);
@@ -635,8 +641,15 @@ export default function WalletPage() {
 
   if (!ready) {
     return (
-      <main className="flex min-h-dvh items-center justify-center">
-        <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-primary" />
+        <p className="font-medium text-foreground">Loading your wallet…</p>
+        {bootSlow && (
+          <p className="text-sm text-muted-foreground">
+            Waking up our server — the first load can take up to ~30s on our free demo tier.
+            Hang tight.
+          </p>
+        )}
       </main>
     );
   }
